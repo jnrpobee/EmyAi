@@ -54,7 +54,7 @@ Output files (cleaned transcript, summary JSON) are written to the `output/` dir
 python3 web_app.py
 ```
 
-This launches **VoxAI** at **http://localhost:7860** where you can:
+This launches **VoxAI** at **http://localhost:7861** where you can:
 - Upload an audio file and start a run
 - Watch live progress and timeline updates over WebSocket
 - View transcript, summary, logs, and lookup results
