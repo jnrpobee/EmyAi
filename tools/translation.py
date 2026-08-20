@@ -27,6 +27,7 @@ SUPPORTED_LANGUAGES: dict[str, str] = {
 
 
 def parse_language(raw: str) -> str:
+    """Normalize and validate a CLI-supplied language code, exiting the process on error."""
     code = raw.strip().lower()
     if not code:
         print("Error: a language code is required.")
@@ -46,6 +47,7 @@ async def translate_text(
     text: str,
     target_language: str,
 ) -> str:
+    """Translate *text* into *target_language* via an OpenAI chat completion call and return the translated text."""
     if not text.strip():
         raise ValueError("Cannot translate empty text.")
 
@@ -81,6 +83,8 @@ async def _translate_to_language(
     metadata: dict,
     audio_filename: str | None,
 ) -> None:
+    """Translate the transcript and summary into *lang*, store the results in the shared context,
+    and write translated JSON/DOCX/PDF outputs alongside the originals."""
     lang_name = SUPPORTED_LANGUAGES[lang]
     print_verbose(f"[translate] translating to {lang_name} ({lang}) ...")
 
@@ -112,6 +116,8 @@ async def run_translation(
     output_dir: Path,
     stem: str,
 ) -> None:
+    """Entry point that pulls the cleaned transcript/summary from the shared context and
+    kicks off translation into *language*, emitting a completion event when done."""
     ctx = get_context()
 
     transcript = ctx.cleaned_transcript or ""

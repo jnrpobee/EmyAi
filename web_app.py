@@ -54,6 +54,7 @@ UPLOAD_CHUNK_SIZE = 1024 * 1024
 STARTING_PROCESS = object()
 
 
+# Reads a float from an environment variable, falling back to a default and enforcing a floor.
 def _env_float(name: str, default: float, minimum: float) -> float:
     try:
         value = float(os.environ.get(name, default))
@@ -67,6 +68,7 @@ WS_IDLE_INTERVAL_SECONDS = _env_float("VOXAI_WS_IDLE_INTERVAL_SECONDS", 3.0, WS_
 
 
 @asynccontextmanager
+# Ensures the app's working directories exist before serving any requests.
 async def lifespan(_: FastAPI):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -79,6 +81,9 @@ app = FastAPI(title="VoxAI", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
+# STATE is the single shared dict describing the current/last transcription run.
+# It is mutated from the request-handling event loop, the subprocess reader thread, and the
+# websocket poller, so every read/write to STATE must happen inside `with STATE_LOCK:`.
 STATE_LOCK = threading.RLock()
 STATE = {
     "process": None,
@@ -103,30 +108,36 @@ STATE = {
 }
 
 
+# Request body for /api/lookup: search term plus optional translation language to search in.
 class LookupPayload(BaseModel):
     query: str
     language: str | None = None
 
 
+# Request body for /api/bundle: optional translation language to include in the zip.
 class BundlePayload(BaseModel):
     language: str | None = None
 
 
+# Request body for /api/transcribe-existing: run a prior upload without re-uploading it.
 class ExistingUploadPayload(BaseModel):
     file_name: str
     language: str | None = None
 
 
+# Request body for /api/uploads/delete: names of uploaded audio files to remove.
 class DeleteUploadsPayload(BaseModel):
     file_names: list[str]
 
 
+# Request body for /api/history/delete: which history stems to remove and what to remove for them.
 class DeleteHistoryPayload(BaseModel):
     stems: list[str]
     delete_audio: bool = True
     delete_transcripts: bool = True
 
 
+# Appends a timestamped timeline entry to STATE, keeping only the most recent items. Caller must hold STATE_LOCK.
 def _append_timeline_locked(label: str, detail: str) -> None:
     STATE["timeline"].append(
         {
@@ -138,6 +149,7 @@ def _append_timeline_locked(label: str, detail: str) -> None:
     STATE["timeline"] = STATE["timeline"][-MAX_TIMELINE_ITEMS:]
 
 
+# Clears all per-run result fields back to their defaults before starting a new run. Caller must hold STATE_LOCK.
 def _reset_outputs_locked() -> None:
     STATE["output"] = ""
     STATE["transcription_output"] = ""
@@ -156,6 +168,7 @@ def _reset_outputs_locked() -> None:
     STATE["active_audio_name"] = None
 
 
+# True if a process handle represents a run that is starting or still executing.
 def _process_is_active(process: object | None) -> bool:
     if process is None:
         return False
@@ -164,6 +177,7 @@ def _process_is_active(process: object | None) -> bool:
     return process.poll() is None
 
 
+# Normalizes a user-supplied language string to a known code, or None if unsupported/empty.
 def _language_value_to_code(language_value: str | None) -> str | None:
     if not language_value:
         return None
@@ -171,11 +185,13 @@ def _language_value_to_code(language_value: str | None) -> str | None:
     return code if code in SUPPORTED_LANGUAGES else None
 
 
+# Resolves a client-supplied file name to a path inside UPLOAD_DIR, rejecting traversal and bad types.
 def _upload_path_for_name(file_name: str) -> Path:
     if not file_name or Path(file_name).name != file_name:
         raise HTTPException(status_code=400, detail="Invalid upload file name.")
     upload_path = (UPLOAD_DIR / file_name).resolve()
     try:
+        # Confirms the resolved path is still inside UPLOAD_DIR (guards against "../" traversal).
         upload_path.relative_to(UPLOAD_DIR.resolve())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid upload file name.") from exc
@@ -184,6 +200,7 @@ def _upload_path_for_name(file_name: str) -> Path:
     return upload_path
 
 
+# Lists metadata for all supported audio files sitting in UPLOAD_DIR, newest first.
 def _list_uploaded_audio_files() -> list[dict[str, object]]:
     if not UPLOAD_DIR.exists():
         return []
@@ -205,17 +222,21 @@ def _list_uploaded_audio_files() -> list[dict[str, object]]:
     return sorted(files, key=lambda item: str(item["modified_at"]), reverse=True)
 
 
+# Rejects history stems that could escape OUTPUT_DIR (path traversal / separators).
 def _validate_history_stem(stem: str) -> str:
     if not stem or Path(stem).name != stem:
         raise HTTPException(status_code=400, detail="Invalid history item.")
     return stem
 
 
+# Detects a stem ending in a language-code suffix (e.g. "_es" or "_es_2"), meaning it's a
+# translated copy of another entry rather than a distinct original transcription.
 def _is_translated_stem(core: str) -> bool:
     match = re.search(r"_([a-z]{2,3})(?:_\d+)?$", core)
     return bool(match and match.group(1) in SUPPORTED_LANGUAGES)
 
 
+# Finds the original uploaded audio file whose stem matches a given transcription output stem.
 def _find_upload_for_stem(stem: str) -> Path | None:
     if not UPLOAD_DIR.exists():
         return None
@@ -229,6 +250,8 @@ def _find_upload_for_stem(stem: str) -> Path | None:
     return None
 
 
+# Groups export files in OUTPUT_DIR by their base stem into one history entry per original run,
+# excluding translated copies (they're surfaced via the base entry, not as separate history rows).
 def _list_history_entries() -> list[dict[str, object]]:
     if not OUTPUT_DIR.exists():
         return []
@@ -266,6 +289,7 @@ def _list_history_entries() -> list[dict[str, object]]:
     return sorted(result, key=lambda item: item["created_at"], reverse=True)
 
 
+# Merges uploaded audio and transcription history by stem into one combined list for the file manager UI.
 def _list_all_files() -> list[dict[str, object]]:
     history_by_stem = {entry["stem"]: entry for entry in _list_history_entries()}
     uploads = _list_uploaded_audio_files()
@@ -305,6 +329,7 @@ def _list_all_files() -> list[dict[str, object]]:
     return sorted(result, key=lambda item: str(item["created_at"]), reverse=True)
 
 
+# Sanitizes an "export_files" payload from the subprocess, keeping only non-empty string values.
 def _normalize_export_files(raw: object) -> dict[str, str]:
     if not isinstance(raw, dict):
         return {}
@@ -315,6 +340,8 @@ def _normalize_export_files(raw: object) -> dict[str, str]:
     return out
 
 
+# Finds the translated export matching <stem>_<lang>[_<n>].<ext>, preferring the highest-numbered
+# suffix (the translation pipeline may write numbered variants when regenerating).
 def _find_translated_export(source_pdf_path: str | None, language_code: str, extension: str) -> str | None:
     if not source_pdf_path:
         return None
@@ -335,6 +362,8 @@ def _find_translated_export(source_pdf_path: str | None, language_code: str, ext
     return str(best_path) if best_path else None
 
 
+# Reads the last LOG_TAIL_LINES lines of a run's log file without loading the whole file:
+# seeks backward from the end in fixed-size chunks until enough newlines or the byte cap is hit.
 def _read_log_tail(log_path: Path | None) -> str:
     if not log_path or not log_path.exists():
         return ""
@@ -355,16 +384,20 @@ def _read_log_tail(log_path: Path | None) -> str:
                 bytes_read += len(chunk)
     except OSError:
         return ""
+    # Chunks were collected end-to-start, so reverse before joining back into forward order.
     lines = b"".join(reversed(chunks)).decode("utf-8", errors="replace").splitlines()
     return "\n".join(lines[-LOG_TAIL_LINES:])
 
 
+# Streams an uploaded file to disk in chunks, offloading blocking writes to a thread.
 async def _save_upload_file(upload_file: UploadFile, destination: Path) -> None:
     with destination.open("wb") as output_file:
         while chunk := await upload_file.read(UPLOAD_CHUNK_SIZE):
             await asyncio.to_thread(output_file.write, chunk)
 
 
+# Builds a JSON-serializable copy of STATE for API responses and websocket pushes.
+# Copies fields out while holding the lock, then reads the log tail afterward (file I/O outside the lock).
 def _snapshot_state() -> dict:
     with STATE_LOCK:
         log_path = STATE["log_path"]
@@ -392,15 +425,19 @@ def _snapshot_state() -> dict:
     return snapshot
 
 
+# Polls faster while a run is active so the UI updates promptly, slower otherwise to save resources.
 def _websocket_interval(snapshot: dict) -> float:
     if snapshot.get("status") == RUNNING_STATUS:
         return WS_ACTIVE_INTERVAL_SECONDS
     return WS_IDLE_INTERVAL_SECONDS
 
 
+# Applies one structured runtime event (emitted by the agent.py subprocess as JSON lines) to STATE,
+# updating the relevant output field(s), notice text, and timeline for the matching event type.
 def _handle_event(process: subprocess.Popen, payload: dict) -> None:
     event_type = payload.get("type")
     with STATE_LOCK:
+        # Ignore events from a process that STATE no longer tracks (e.g. superseded by a newer run).
         if STATE["process"] is not process:
             return
     if event_type == "raw_transcript_ready":
@@ -466,6 +503,9 @@ def _handle_event(process: subprocess.Popen, payload: dict) -> None:
             _append_timeline_locked("Run completed", "Final package returned.")
 
 
+# Background-thread target that owns a running subprocess for its whole lifetime: tees its stdout
+# to the run's log file, parses EVENT_PREFIX-tagged JSON lines into _handle_event, and once the
+# process exits, resolves STATE's final status (failed/completed) from the exit code.
 def _reader_thread(process: subprocess.Popen) -> None:
     assert process.stdout is not None
     fallback_output_lines: list[str] = []
@@ -482,6 +522,7 @@ def _reader_thread(process: subprocess.Popen) -> None:
                 log_file.write(stripped_line + "\n")
                 log_file.flush()
             if stripped_line.startswith(EVENT_PREFIX):
+                # Structured progress line from the pipeline; non-JSON payloads fall back to plain output.
                 event_json = stripped_line[len(EVENT_PREFIX) :].strip()
                 try:
                     _handle_event(process, json.loads(event_json))
@@ -489,6 +530,7 @@ def _reader_thread(process: subprocess.Popen) -> None:
                     fallback_output_lines.append(stripped_line)
                 continue
             fallback_output_lines.append(stripped_line)
+            # Cap the in-memory fallback buffer so a noisy/long run can't grow it unbounded.
             if len(fallback_output_lines) > 3000:
                 fallback_output_lines = fallback_output_lines[-3000:]
     finally:
@@ -507,11 +549,13 @@ def _reader_thread(process: subprocess.Popen) -> None:
             _append_timeline_locked("Run failed", STATE["status"])
             return
         if STATE["status"] == COMPLETED_STATUS:
+            # A "final_result" event already marked completion; just backfill any missing fields.
             if not STATE["output"]:
                 STATE["output"] = "\n".join(fallback_output_lines).strip()
             if STATE["completed_at"] is None:
                 STATE["completed_at"] = datetime.now()
             return
+        # Exit code was 0 but no "final_result" event arrived; treat clean exit as completion anyway.
         STATE["status"] = COMPLETED_STATUS
         STATE["output"] = STATE["output"] or "\n".join(fallback_output_lines).strip()
         if STATE["status"] == COMPLETED_STATUS and not STATE["transcription_output"]:
@@ -521,6 +565,7 @@ def _reader_thread(process: subprocess.Popen) -> None:
         _append_timeline_locked("Run completed", "Process exited successfully.")
 
 
+# Stops the tracked process (terminate, then kill on timeout) or cancels a pending start. Caller must hold STATE_LOCK.
 def _terminate_process_locked() -> None:
     process = STATE["process"]
     if process is STARTING_PROCESS:
@@ -535,6 +580,7 @@ def _terminate_process_locked() -> None:
     STATE["process"] = None
 
 
+# Finds each regex match in text and returns a short "...context..." snippet around it, capped in count.
 def _build_lookup_matches(section_name: str, text: str, query_pattern: re.Pattern[str]) -> list[str]:
     if not text.strip():
         return []
@@ -548,6 +594,7 @@ def _build_lookup_matches(section_name: str, text: str, query_pattern: re.Patter
     return snippets
 
 
+# Renders the main single-page UI, passing the supported translation languages for the picker.
 @app.get("/", response_class=HTMLResponse)
 async def homepage(request: Request):
     return templates.TemplateResponse(
@@ -559,11 +606,14 @@ async def homepage(request: Request):
     )
 
 
+# One-shot alternative to the websocket for clients that just need the current run state once.
 @app.get("/api/state")
 async def get_state():
     return JSONResponse(_snapshot_state())
 
 
+# Pushes a fresh state snapshot to the client on a loop (fast while running, slow while idle)
+# until the client disconnects; this drives the live progress UI.
 @app.websocket("/ws/state")
 async def websocket_state(websocket: WebSocket):
     await websocket.accept()
@@ -576,12 +626,16 @@ async def websocket_state(websocket: WebSocket):
         return
 
 
+# Launches agent.py as a subprocess to transcribe upload_path and wires up a reader thread to
+# stream its progress into STATE. Shared by the "new upload" and "re-run existing upload" routes.
 def _start_transcription_process(upload_path: Path, translate_lang: str | None) -> dict:
     with STATE_LOCK:
         existing = STATE["process"]
         if _process_is_active(existing):
             raise HTTPException(status_code=409, detail="A transcription is already running.")
         _reset_outputs_locked()
+        # Claim the slot with a sentinel before Popen runs, so a concurrent request sees "already running"
+        # instead of racing to start a second process while this one is still being spawned.
         STATE["process"] = STARTING_PROCESS
         STATE["status"] = RUNNING_STATUS
         STATE["translate_lang"] = translate_lang
@@ -615,6 +669,7 @@ def _start_transcription_process(upload_path: Path, translate_lang: str | None) 
 
     start_cancelled = False
     with STATE_LOCK:
+        # If something else (e.g. /api/clear) reset STATE while Popen was starting, back out and kill it.
         if STATE["process"] is not STARTING_PROCESS:
             start_cancelled = True
         else:
@@ -634,16 +689,19 @@ def _start_transcription_process(upload_path: Path, translate_lang: str | None) 
     return _snapshot_state()
 
 
+# Lists audio files previously uploaded and available to (re-)transcribe.
 @app.get("/api/uploads")
 async def list_uploads():
     return {"files": _list_uploaded_audio_files()}
 
 
+# Lists the combined view of uploads + history entries for the file manager UI.
 @app.get("/api/files")
 async def list_files():
     return {"files": _list_all_files()}
 
 
+# Accepts a new audio upload, saves it, and kicks off a transcription run for it.
 @app.post("/api/transcribe")
 async def transcribe(audio_file: UploadFile = File(...), language: str | None = Form(None)):
     suffix = Path(audio_file.filename or "").suffix.lower()
@@ -664,6 +722,7 @@ async def transcribe(audio_file: UploadFile = File(...), language: str | None = 
     return JSONResponse(state)
 
 
+# Re-runs transcription on an audio file that was already uploaded, without re-uploading it.
 @app.post("/api/transcribe-existing")
 async def transcribe_existing(payload: ExistingUploadPayload):
     upload_path = _upload_path_for_name(payload.file_name)
@@ -673,6 +732,7 @@ async def transcribe_existing(payload: ExistingUploadPayload):
     return JSONResponse(state)
 
 
+# Deletes selected uploaded audio files, refusing to delete one that the active run depends on.
 @app.post("/api/uploads/delete")
 async def delete_uploads(payload: DeleteUploadsPayload):
     if not payload.file_names:
@@ -702,11 +762,13 @@ async def delete_uploads(payload: DeleteUploadsPayload):
     return {"deleted": deleted, "missing": missing, "files": _list_uploaded_audio_files()}
 
 
+# Lists past transcription runs available in output history.
 @app.get("/api/history")
 async def list_history():
     return {"entries": _list_history_entries()}
 
 
+# Serves one specific historical export file (json/docx/pdf, optionally its verbatim variant).
 @app.get("/api/history/download")
 async def download_history_file(stem: str, format: str, verbatim: bool = False):
     stem = _validate_history_stem(stem)
@@ -723,6 +785,8 @@ async def download_history_file(stem: str, format: str, verbatim: bool = False):
     return FileResponse(path=file_path, filename=file_path.name, media_type=HISTORY_MEDIA_TYPES[format])
 
 
+# Deletes history output files and/or their source audio for selected stems, refusing to
+# touch the currently active run's files, and clearing STATE if its audio ends up deleted.
 @app.post("/api/history/delete")
 async def delete_history(payload: DeleteHistoryPayload):
     if not payload.stems:
@@ -777,6 +841,7 @@ async def delete_history(payload: DeleteHistoryPayload):
     return {"deleted_stems": deleted_stems, "deleted_files": deleted_files, "files": _list_all_files()}
 
 
+# Stops any active/starting process and resets STATE back to idle, discarding current run outputs.
 @app.post("/api/clear")
 async def clear_state():
     with STATE_LOCK:
@@ -788,6 +853,8 @@ async def clear_state():
     return JSONResponse(_snapshot_state())
 
 
+# Searches the current transcript and summary (or their translation, if requested) for a query
+# term and returns short context snippets for each match.
 @app.post("/api/lookup")
 async def lookup(payload: LookupPayload):
     query = payload.query.strip()
@@ -810,6 +877,8 @@ async def lookup(payload: LookupPayload):
     return {"result": "\n".join(matches) if matches else f'No matches found for "{query}".'}
 
 
+# Zips the completed run's export files (plus a translated set and the log, if available) into
+# a downloadable bundle and records its path in STATE for /api/download/bundle.
 @app.post("/api/bundle")
 async def create_bundle(payload: BundlePayload):
     language_code = _language_value_to_code(payload.language)
@@ -842,6 +911,7 @@ async def create_bundle(payload: BundlePayload):
     if not sources:
         raise HTTPException(status_code=404, detail="No export files found.")
 
+    # De-duplicate by resolved path (e.g. translated export could coincide with a base export).
     unique_sources: list[Path] = []
     seen: set[str] = set()
     for source in sources:
@@ -867,6 +937,8 @@ async def create_bundle(payload: BundlePayload):
     return {"bundle_url": "/api/download/bundle", "bundle_name": bundle_path.name}
 
 
+# Serves the generated PDF; if a language is given and matches the run's translation, serves that
+# translated PDF instead (falling back to the base PDF if no translated file is found).
 @app.get("/api/download/pdf")
 async def download_pdf(language: str | None = None, verbatim: bool = False):
     if verbatim:
@@ -895,6 +967,8 @@ async def download_pdf(language: str | None = None, verbatim: bool = False):
     return FileResponse(path=file_path, filename=file_path.name, media_type="application/pdf")
 
 
+# Serves the generated DOCX, preferring a translated version when the requested language matches
+# the run's translation (same fallback pattern as download_pdf).
 @app.get("/api/download/docx")
 async def download_docx(language: str | None = None, verbatim: bool = False):
     if verbatim:
@@ -937,6 +1011,7 @@ async def download_docx(language: str | None = None, verbatim: bool = False):
     )
 
 
+# Serves the JSON export, preferring a translated version when requested (same pattern as download_pdf).
 @app.get("/api/download/json")
 async def download_json(language: str | None = None, verbatim: bool = False):
     if verbatim:
@@ -971,6 +1046,7 @@ async def download_json(language: str | None = None, verbatim: bool = False):
     return FileResponse(path=file_path, filename=file_path.name, media_type="application/json")
 
 
+# Serves the most recently created zip bundle from /api/bundle.
 @app.get("/api/download/bundle")
 async def download_bundle():
     with STATE_LOCK:
@@ -983,5 +1059,6 @@ async def download_bundle():
     return FileResponse(path=file_path, filename=file_path.name, media_type="application/zip")
 
 
+# Dev entrypoint: run the app directly with `python web_app.py` instead of a uvicorn CLI invocation.
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=7861)

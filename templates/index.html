@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/static/styles.css?v=20260814-remove-rerun-dropdown">
 </head>
 <body>
+  <!-- Site header: brand/logo, connection status badge, and primary nav (nav links currently disabled/commented out) -->
   <header class="site-header" aria-label="Site header">
     <div class="header-top">
       <div class="header-brand">
@@ -43,8 +44,10 @@
     </nav>
   </header>
 
+  <!-- Main two-column layout: left-column holds controls/artifacts/status panels, right-column holds monitor/results -->
   <main class="layout">
     <div class="left-column">
+      <!-- Run Controls: file upload, output language, and start/clear/bundle actions -->
       <section class="panel controls">
         <h2>Run Controls</h2>
         <div id="statusBadge" class="status-pill idle">
@@ -56,6 +59,7 @@
         <form id="runForm">
           <label class="field">
             <span>Audio File</span>
+            <!-- audioFileInput is an invisible overlay atop the styled dropzone so native file-picker/drag-drop still work -->
             <div id="audioDropZone" class="file-dropzone" tabindex="0" role="button" aria-label="Choose or drop an audio file">
               <div class="file-input-visual">
                 <input id="audioFileInput" class="file-input-overlay" type="file" accept=".mp3,.wav,.m4a,.flac,.mp4">
@@ -83,6 +87,7 @@
         </form>
       </section>
 
+      <!-- Files/upload-manager modal: lists past transcriptions; hidden by default and shown via JS when "Manage files" is clicked -->
       <section id="historyPanel" class="upload-manager" hidden aria-modal="true" role="dialog" aria-labelledby="historyTitle">
         <div class="panel upload-manager-card">
           <div class="panel-title-row">
@@ -105,6 +110,7 @@
               </button>
             </div>
           </div>
+          <!-- Bulk-select controls: hidden until "Select" mode is toggled on via JS -->
           <div id="historyBulkActions" class="upload-actions" hidden>
             <label class="select-all-row">
               <input id="selectAllHistory" type="checkbox">
@@ -115,6 +121,7 @@
           <div id="historyList" class="uploaded-files-list">
             <p class="upload-empty">No transcriptions found.</p>
           </div>
+          <!-- Delete-confirmation popup: hidden by default, shown via JS before a file deletion is committed -->
           <div id="historyDeleteConfirmPopup" class="delete-confirm-popup" hidden role="alertdialog" aria-labelledby="historyDeleteConfirmTitle" aria-describedby="historyDeleteConfirmMessage">
             <div>
               <p id="historyDeleteConfirmTitle" class="delete-confirm-title">Delete this file?</p>
@@ -138,6 +145,7 @@
         </div>
       </section>
 
+      <!-- Artifact Center: choose export format/verbatim option and download the generated report -->
       <section class="panel artifacts">
         <h2>Artifact Center</h2>
         <p class="artifact-note">Select an artifact type, then download the currently available file.</p>
@@ -163,6 +171,7 @@
         </div>
       </section>
 
+      <!-- Operations Snapshot: current run metadata and a checklist of run-progress steps, updated via JS/websocket -->
       <section class="panel operations">
         <h2>Operations Snapshot</h2>
         <div class="ops-grid">
@@ -191,6 +200,7 @@
         </ul>
       </section>
 
+      <!-- Platform Highlights: collapsible pill list, expanded/collapsed via aria-expanded button toggling the hidden panel -->
       <section class="panel platform-meta">
         <div class="panel-title-row platform-meta-header">
           <h3 class="platform-meta-title">Platform Highlights</h3>
@@ -217,6 +227,7 @@
     </div>
 
     <div class="right-column">
+      <!-- Live Monitor: real-time run metrics and event timeline, updated via websocket/JS during a run -->
       <section class="panel monitor">
         <h2>Live Monitor</h2>
         <div class="metric-grid">
@@ -253,6 +264,7 @@
         </div>
       </section>
 
+      <!-- Results Workspace: tabbed output panel (transcript/summary/logs/lookup), tab switching handled via JS on data-tab -->
       <section class="panel results">
         <h2>Results Workspace</h2>
         <div class="tab-header">
@@ -290,6 +302,7 @@
     </div>
   </main>
 
+  <!-- Site footer: contact/legal info and last-refresh timestamp (updated via JS) -->
   <footer class="site-footer" aria-label="Site footer">
     <div class="footer-main">
       <p class="footer-meta">Provo, UT 84602, USA | 801-000-0000 | &copy; 2026 All Rights Reserved</p>

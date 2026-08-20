@@ -1,3 +1,4 @@
+// Cache of DOM element references used throughout the app, keyed by logical name.
 const refs = {
   togglePlatformMetaBtn: document.getElementById("togglePlatformMetaBtn"),
   platformMetaPills: document.getElementById("platformMetaPills"),
@@ -62,6 +63,7 @@ const refs = {
   checkExport: document.getElementById("checkExport"),
 };
 
+// Mutable app-level state shared across render/update functions.
 let latestState = null;
 let socket = null;
 let connectionState = "connecting";
@@ -78,6 +80,7 @@ let historyEntries = [];
 let pendingDeleteHistoryStems = [];
 let historySelectionMode = false;
 
+// Static label lookup tables and the allowlist of audio file extensions accepted for upload.
 const ARTIFACT_LABELS = {
   pdf: "PDF Report",
   docx: "DOCX Report",
@@ -88,11 +91,13 @@ const HISTORY_FORMAT_LABELS = { pdf: "PDF", docx: "DOCX", json: "JSON" };
 const ACCEPTED_AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".flac", ".mp4"]);
 let audioDropDragDepth = 0;
 
+// Return the currently selected translation language code (lowercased), or null if none chosen.
 function getSelectedLanguage() {
   const code = (refs.languageSelect.value || "").trim().toLowerCase();
   return code || null;
 }
 
+// Format the elapsed time between two timestamps (or now, if not completed) as MM:SS.
 function formatRuntime(startedAt, completedAt) {
   if (!startedAt) return "--:--";
   const start = new Date(startedAt);
@@ -103,6 +108,7 @@ function formatRuntime(startedAt, completedAt) {
   return `${min}:${sec}`;
 }
 
+// Format an ISO date/time value into a localized display string, or "--" if invalid/missing.
 function formatDateTime(value) {
   if (!value) return "--";
   const date = new Date(value);
@@ -110,6 +116,7 @@ function formatDateTime(value) {
   return date.toLocaleString();
 }
 
+// Format a byte count as a human-readable size string (B/KB/MB/GB).
 function formatBytes(value) {
   const bytes = Number(value || 0);
   if (bytes < 1024) return `${bytes} B`;
@@ -123,16 +130,19 @@ function formatBytes(value) {
   return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+// Count whitespace-separated words in a text string.
 function countWords(text) {
   if (!text) return 0;
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+// Count lines that look like bullet points (start with "-").
 function countBullets(text) {
   if (!text) return 0;
   return text.split("\n").filter((line) => line.trim().startsWith("-")).length;
 }
 
+// Build the notice text shown near the run controls, reflecting file selection or run state.
 function getRunControlNotice(state) {
   const status = String((state && state.status) || "");
   if (status === "Idle" || !status) {
@@ -143,6 +153,7 @@ function getRunControlNotice(state) {
   return (state && state.notice) || "Ready.";
 }
 
+// Update the status badge's CSS class and label to match the given run status.
 function setStatusBadge(status) {
   const s = status || "Idle";
   const cssClass =
@@ -151,6 +162,7 @@ function setStatusBadge(status) {
   refs.statusBadge.querySelector(".label").textContent = s;
 }
 
+// Enable a download link when a URL is available, otherwise disable it.
 function setDownloadState(link, url) {
   if (!link) return;
   if (url) {
@@ -164,11 +176,13 @@ function setDownloadState(link, url) {
   }
 }
 
+// Toggle the "done" class on a checklist item element.
 function setChecklistState(node, done) {
   if (!node) return;
   node.classList.toggle("done", done);
 }
 
+// Update the websocket connection badges/labels to reflect connecting/connected/disconnected state.
 function setConnectionState(nextState) {
   connectionState = nextState;
   const label = nextState === "connected" ? "Connected" : nextState === "disconnected" ? "Disconnected" : "Connecting";
@@ -177,17 +191,21 @@ function setConnectionState(nextState) {
   refs.opsConnection.textContent = label;
 }
 
+// Resize a textarea/output element's height to fit its scrollable content.
 function autoSizeOutput(node) {
   if (!node) return;
   node.style.height = "auto";
   node.style.height = `${node.scrollHeight}px`;
 }
 
+// Auto-size both the transcript and summary output boxes.
 function resizeResultOutputs() {
   autoSizeOutput(refs.transcriptOutput);
   autoSizeOutput(refs.summaryOutput);
 }
 
+// Derive the transcript/summary text and export download URLs to show, based on run state,
+// the selected translation language, and whether the run failed.
 function buildDisplayState(state) {
   const selectedLanguage = getSelectedLanguage();
   const runLanguage = state.translate_lang;
@@ -249,6 +267,8 @@ function buildDisplayState(state) {
   };
 }
 
+// Update the single artifact download link/label/status for the currently selected artifact
+// type (pdf/docx/json/bundle) and verbatim toggle.
 function renderArtifactSelection(running) {
   const selected = refs.artifactSelect.value || "pdf";
   const verbatim = Boolean(refs.artifactVerbatimToggle && refs.artifactVerbatimToggle.checked);
@@ -285,6 +305,7 @@ function renderArtifactSelection(running) {
   refs.artifactStatus.textContent = running ? "In progress" : "Pending";
 }
 
+// Render the run timeline list (most recent first) from an array of timeline event entries.
 function renderTimeline(items) {
   refs.timelineList.replaceChildren();
   if (!items || !items.length) {
@@ -319,6 +340,7 @@ function renderTimeline(items) {
   refs.timelineList.append(fragment);
 }
 
+// Sync the "selected"/"Use" button states in the history list with the currently selected upload.
 function syncUploadedFileActions() {
   const running = latestState && latestState.status === "Running";
   refs.historyList.querySelectorAll(".history-row").forEach((row) => {
@@ -330,12 +352,14 @@ function syncUploadedFileActions() {
   });
 }
 
+// Clear the currently selected previously-uploaded file and refresh related UI.
 function clearSelectedUpload() {
   selectedUploadName = null;
   syncAudioDropHint();
   syncUploadedFileActions();
 }
 
+// Select a previously uploaded file as the audio source for the next transcription run.
 function selectUploadedFile(fileName) {
   if (!fileName) return;
   selectedUploadName = fileName;
@@ -345,6 +369,7 @@ function selectUploadedFile(fileName) {
   refs.noticeText.textContent = `${selectedUploadName} Ready. File Selected`;
 }
 
+// Choose between the clean (display) transcript and the raw verbatim transcript, based on the toggle.
 function getTranscriptDisplayText(state, display) {
   if (!showingVerbatimTranscript) return display.transcript || "";
   if (state.raw_transcript_output) return state.raw_transcript_output;
@@ -353,11 +378,14 @@ function getTranscriptDisplayText(state, display) {
   return "Verbatim transcript not available.";
 }
 
+// Toggle between clean and verbatim transcript views and re-render the current state.
 function toggleVerbatimTranscriptView() {
   showingVerbatimTranscript = !showingVerbatimTranscript;
   if (latestState) renderState(latestState);
 }
 
+// Main render function: given the latest run state, update the status badge, transcript/summary
+// text, metrics, ops panel, checklist, timeline, and artifact download links.
 function renderState(state) {
   lastRefreshAt = new Date();
 
@@ -404,6 +432,7 @@ function renderState(state) {
   syncUploadedFileActions();
 }
 
+// Return the lowercased file extension (including the leading dot) of a file name.
 function getFileExtension(name) {
   const value = String(name || "");
   const dotIndex = value.lastIndexOf(".");
@@ -411,6 +440,7 @@ function getFileExtension(name) {
   return value.slice(dotIndex).toLowerCase();
 }
 
+// Check whether a File is an accepted audio type, by extension first and falling back to MIME type.
 function isAcceptedAudioFile(file) {
   if (!file) return false;
   const extension = getFileExtension(file.name);
@@ -431,16 +461,19 @@ function isAcceptedAudioFile(file) {
   );
 }
 
+// Check whether a drag event is carrying files (as opposed to e.g. text or links).
 function dragEventHasFiles(event) {
   if (!event.dataTransfer) return false;
   return Array.from(event.dataTransfer.types || []).includes("Files");
 }
 
+// Toggle the audio drop zone's "dragging" visual state.
 function setAudioDropDragging(active) {
   if (!refs.audioDropZone) return;
   refs.audioDropZone.classList.toggle("dragging", Boolean(active));
 }
 
+// Update the drop zone's hint text and "has-file" classes to reflect the current file selection.
 function syncAudioDropHint() {
   if (!refs.audioDropHint) return;
   const file = refs.audioFileInput.files && refs.audioFileInput.files[0];
@@ -457,10 +490,13 @@ function syncAudioDropHint() {
   refs.audioDropHint.textContent = file ? `Selected file: ${file.name}` : "Or drag and drop an audio file here.";
 }
 
+// Programmatically assign a dropped file to the hidden file input via the DataTransfer API,
+// then dispatch a "change" event so existing input handlers pick it up.
 function assignAudioFile(file) {
   if (!file) return false;
   try {
     if (typeof DataTransfer === "function") {
+      // Build a synthetic FileList containing just the dropped file.
       const transfer = new DataTransfer();
       transfer.items.add(file);
       refs.audioFileInput.files = transfer.files;
@@ -475,6 +511,7 @@ function assignAudioFile(file) {
   }
 }
 
+// Handle drag-enter on the drop zone, tracking nested enter/leave depth to avoid flicker.
 function onAudioDropZoneDragEnter(event) {
   if (!dragEventHasFiles(event)) return;
   event.preventDefault();
@@ -482,12 +519,14 @@ function onAudioDropZoneDragEnter(event) {
   setAudioDropDragging(true);
 }
 
+// Handle drag-over on the drop zone: prevent default to allow dropping and show a "copy" cursor.
 function onAudioDropZoneDragOver(event) {
   if (!dragEventHasFiles(event)) return;
   event.preventDefault();
   if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
 }
 
+// Handle drag-leave on the drop zone, clearing the dragging state once the enter/leave depth hits zero.
 function onAudioDropZoneDragLeave(event) {
   if (!dragEventHasFiles(event)) return;
   event.preventDefault();
@@ -495,6 +534,7 @@ function onAudioDropZoneDragLeave(event) {
   if (audioDropDragDepth === 0) setAudioDropDragging(false);
 }
 
+// Handle a file drop: validate the dropped file's type and assign it to the file input.
 function onAudioDropZoneDrop(event) {
   if (!dragEventHasFiles(event)) return;
   event.preventDefault();
@@ -515,6 +555,7 @@ function onAudioDropZoneDrop(event) {
   refs.noticeText.textContent = `${file.name} Ready. File Uploaded`;
 }
 
+// Forward clicks on the drop zone's background (not its children) to the hidden file input.
 function onAudioDropZoneClick(event) {
   if (!refs.audioFileInput) return;
   if (event.target === refs.audioDropZone || event.target === refs.audioDropHint) {
@@ -522,6 +563,7 @@ function onAudioDropZoneClick(event) {
   }
 }
 
+// Allow keyboard activation (Enter/Space) of the drop zone to open the file chooser.
 function onAudioDropZoneKeydown(event) {
   if (!refs.audioFileInput) return;
   if (event.target !== refs.audioDropZone) return;
@@ -531,6 +573,7 @@ function onAudioDropZoneKeydown(event) {
   }
 }
 
+// Wire up all drag/drop, click, and keyboard handlers for the audio drop zone and file input.
 function setupAudioDropZone() {
   if (!refs.audioDropZone || !refs.audioFileInput) return;
   refs.audioDropZone.addEventListener("dragenter", onAudioDropZoneDragEnter);
@@ -539,6 +582,7 @@ function setupAudioDropZone() {
   refs.audioDropZone.addEventListener("drop", onAudioDropZoneDrop);
   refs.audioDropZone.addEventListener("click", onAudioDropZoneClick);
   refs.audioDropZone.addEventListener("keydown", onAudioDropZoneKeydown);
+  // Manual file selection via the native chooser also counts as a fresh upload.
   refs.audioFileInput.addEventListener("change", () => {
     const file = refs.audioFileInput.files && refs.audioFileInput.files[0];
     if (file) {
@@ -551,6 +595,9 @@ function setupAudioDropZone() {
   syncAudioDropHint();
 }
 
+// Section: backend API helpers (JSON POST helper and background file-list refresh).
+
+// POST a JSON payload to a URL and return the parsed JSON response, throwing on a non-OK status.
 async function callJson(url, payload) {
   const response = await fetch(url, {
     method: "POST",
@@ -564,6 +611,7 @@ async function callJson(url, payload) {
   return response.json();
 }
 
+// Reload the uploaded-files history list in the background, ignoring errors (non-critical refresh).
 async function refreshUploadedFilesSilently() {
   try {
     const response = await fetch("/api/files");
@@ -575,16 +623,22 @@ async function refreshUploadedFilesSilently() {
   }
 }
 
+// Section: file history panel (list, selection, delete confirmation).
+
+// Build the download URL for a history entry's export in a given format (optionally verbatim).
 function buildHistoryDownloadUrl(stem, format, verbatim) {
   const params = new URLSearchParams({ stem, format });
   if (verbatim) params.set("verbatim", "true");
   return `/api/history/download?${params.toString()}`;
 }
 
+// Return the stems (file identifiers) of all checked history rows.
 function getSelectedHistoryStems() {
   return Array.from(refs.historyList.querySelectorAll(".history-select:checked")).map((input) => input.value);
 }
 
+// Update bulk-action controls (delete button, select-all checkbox) based on the current history
+// checkbox selection.
 function syncHistorySelectionState() {
   const checkboxes = Array.from(refs.historyList.querySelectorAll(".history-select"));
   const selectedCount = checkboxes.filter((input) => input.checked).length;
@@ -596,6 +650,7 @@ function syncHistorySelectionState() {
   refs.historyBulkActions.hidden = selectedCount === 0;
 }
 
+// Enter or exit history multi-select mode, clearing checkboxes when exiting.
 function setHistorySelectionMode(active) {
   historySelectionMode = active;
   refs.historyList.classList.toggle("selecting", active);
@@ -609,10 +664,12 @@ function setHistorySelectionMode(active) {
   syncHistorySelectionState();
 }
 
+// Toggle history multi-select mode on/off.
 function toggleHistorySelectionMode() {
   setHistorySelectionMode(!historySelectionMode);
 }
 
+// Render the file history list (rows with select/use/download/delete controls) from server entries.
 function renderHistory(entries) {
   historyEntries = Array.isArray(entries) ? entries : [];
   if (selectedUploadName && !historyEntries.some((entry) => entry.audio_name === selectedUploadName)) {
@@ -697,6 +754,7 @@ function renderHistory(entries) {
         link.className = "download";
         link.textContent = HISTORY_FORMAT_LABELS[format];
 
+        // Refresh this format's link availability/URL based on the verbatim toggle.
         const updateLink = () => {
           const verbatim = Boolean(verbatimToggle && verbatimToggle.checked);
           const available = verbatim ? entry.verbatim_formats : entry.formats;
@@ -723,6 +781,7 @@ function renderHistory(entries) {
   syncHistorySelectionState();
 }
 
+// Fetch the uploaded files list from the server and render it into the history panel.
 async function loadHistory() {
   try {
     refs.noticeText.textContent = "Refreshing files.";
@@ -739,6 +798,7 @@ async function loadHistory() {
   }
 }
 
+// Show the history panel (loading its contents) or hide it if already open.
 async function toggleHistoryPanel() {
   if (refs.historyPanel.hidden) {
     refs.historyPanel.hidden = false;
@@ -749,6 +809,7 @@ async function toggleHistoryPanel() {
   }
 }
 
+// Hide the history panel and reset its transient UI state (selection mode, delete popup).
 function closeHistoryPanel() {
   hideHistoryDeleteConfirm();
   setHistorySelectionMode(false);
@@ -756,12 +817,15 @@ function closeHistoryPanel() {
   refs.showHistoryBtn.focus();
 }
 
+// Enable the confirm-delete button only when at least one deletion option (audio/transcripts) is checked.
 function updateDeleteConfirmActionable() {
   const audioChecked = !refs.deleteAudioOption.hidden && refs.deleteAudioCheckbox.checked;
   const transcriptsChecked = !refs.deleteTranscriptsOption.hidden && refs.deleteTranscriptsCheckbox.checked;
   refs.confirmHistoryDeleteBtn.disabled = !audioChecked && !transcriptsChecked;
 }
 
+// Open the delete-confirmation popup for the given history stems, showing which delete
+// options (audio/transcripts) apply based on the selected entries.
 function showHistoryDeleteConfirm(stems) {
   if (!stems || !stems.length) return;
   pendingDeleteHistoryStems = stems;
@@ -785,17 +849,21 @@ function showHistoryDeleteConfirm(stems) {
   refs.confirmHistoryDeleteBtn.focus();
 }
 
+// Close the delete-confirmation popup and clear the pending deletion list.
 function hideHistoryDeleteConfirm() {
   pendingDeleteHistoryStems = [];
   refs.historyDeleteConfirmPopup.hidden = true;
 }
 
+// Open the delete-confirmation popup for the currently checked history rows.
 function requestDeleteSelectedHistory() {
   const stems = getSelectedHistoryStems();
   if (!stems.length) return;
   showHistoryDeleteConfirm(stems);
 }
 
+// Send the delete request for the pending history stems, refresh the history list, and
+// refresh the current run state if the active audio file was among those deleted.
 async function deleteSelectedHistory() {
   const stems = pendingDeleteHistoryStems.slice();
   if (!stems.length) return;
@@ -813,6 +881,7 @@ async function deleteSelectedHistory() {
     const deletedStems = data.deleted_stems || [];
     const activeStem = latestState && latestState.active_audio_name ? latestState.active_audio_name.replace(/\.[^./]+$/, "") : null;
     if (activeStem && deletedStems.includes(activeStem)) {
+      // The file backing the active run was deleted; re-pull server state to reflect that.
       const stateResponse = await fetch("/api/state");
       if (stateResponse.ok) renderState(await stateResponse.json());
     }
@@ -821,6 +890,10 @@ async function deleteSelectedHistory() {
   }
 }
 
+// Section: run actions (submit, clear, bundle, lookup, copy).
+
+// Handle the run form submission: transcribe a freshly chosen file or reuse a previously
+// selected upload, then render the resulting state.
 async function submitRun(event) {
   event.preventDefault();
   const file = refs.audioFileInput.files[0];
@@ -853,6 +926,7 @@ async function submitRun(event) {
   }
 }
 
+// Reset the current run/state on the server and clear related UI (selection, lookup output).
 async function clearRun() {
   try {
     const state = await callJson("/api/clear", {});
@@ -865,6 +939,7 @@ async function clearRun() {
   }
 }
 
+// Ask the server to build a downloadable ZIP bundle of the current run's exports.
 async function buildBundle() {
   try {
     await callJson("/api/bundle", { language: getSelectedLanguage() });
@@ -878,6 +953,7 @@ async function buildBundle() {
   }
 }
 
+// Send a lookup query (with selected language) to the server and display the result.
 async function runLookup() {
   try {
     const payload = { query: refs.lookupInput.value || "", language: getSelectedLanguage() };
@@ -888,6 +964,7 @@ async function runLookup() {
   }
 }
 
+// Copy the transcript text to the clipboard and show a brief confirmation toast.
 async function copyTranscript() {
   try {
     await navigator.clipboard.writeText(refs.transcriptOutput.value || "");
@@ -899,6 +976,7 @@ async function copyTranscript() {
   setTimeout(() => refs.copyToast.classList.remove("show"), 1600);
 }
 
+// Expand or collapse the platform highlights pill list.
 function togglePlatformMeta() {
   const expanded = refs.togglePlatformMetaBtn.getAttribute("aria-expanded") === "true";
   const next = !expanded;
@@ -908,6 +986,7 @@ function togglePlatformMeta() {
   refs.platformMetaPills.hidden = !next;
 }
 
+// Switch the active tab button/panel to the given tab name.
 function activateTab(tabName) {
   refs.tabButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.tab === tabName);
@@ -918,6 +997,9 @@ function activateTab(tabName) {
   resizeResultOutputs();
 }
 
+// Section: websocket handling for live run-state updates.
+
+// Open the websocket connection for live state updates, and automatically reconnect on close.
 function connectWebSocket() {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   setConnectionState("connecting");
@@ -938,10 +1020,12 @@ function connectWebSocket() {
 
   socket.onclose = () => {
     setConnectionState("disconnected");
+    // Retry the connection after a short delay rather than giving up permanently.
     setTimeout(connectWebSocket, 1400);
   };
 }
 
+// Load the initial run state and file history when the page first loads.
 async function initialLoad() {
   try {
     const response = await fetch("/api/state");
@@ -954,6 +1038,7 @@ async function initialLoad() {
   await refreshUploadedFilesSilently();
 }
 
+// Section: wire up all event listeners for controls, panels, and modals.
 refs.runForm.addEventListener("submit", submitRun);
 refs.clearBtn.addEventListener("click", clearRun);
 refs.bundleBtn.addEventListener("click", buildBundle);
@@ -961,6 +1046,7 @@ refs.lookupBtn.addEventListener("click", runLookup);
 refs.showHistoryBtn.addEventListener("click", toggleHistoryPanel);
 refs.toggleHistorySelectBtn.addEventListener("click", toggleHistorySelectionMode);
 refs.closeHistoryBtn.addEventListener("click", closeHistoryPanel);
+// Close the history panel when clicking its backdrop; handle the refresh button via delegation.
 refs.historyPanel.addEventListener("click", (event) => {
   if (!(event.target instanceof Element)) return;
   if (event.target === refs.historyPanel) {
@@ -973,6 +1059,7 @@ refs.historyPanel.addEventListener("click", (event) => {
     loadHistory();
   }
 });
+// Delegate clicks within the history list to the "use" / "delete" row actions.
 refs.historyList.addEventListener("click", (event) => {
   if (!(event.target instanceof Element)) return;
   const useButton = event.target.closest("[data-action='select-upload']");
@@ -1000,6 +1087,7 @@ refs.deleteAudioCheckbox.addEventListener("change", updateDeleteConfirmActionabl
 refs.deleteTranscriptsCheckbox.addEventListener("change", updateDeleteConfirmActionable);
 refs.cancelHistoryDeleteBtn.addEventListener("click", hideHistoryDeleteConfirm);
 refs.confirmHistoryDeleteBtn.addEventListener("click", deleteSelectedHistory);
+// Escape closes the delete-confirmation popup, or the history panel if that's open instead.
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!refs.historyDeleteConfirmPopup.hidden) {
@@ -1010,6 +1098,7 @@ document.addEventListener("keydown", (event) => {
     closeHistoryPanel();
   }
 });
+// Submit the lookup query when pressing Enter in the lookup input.
 refs.lookupInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
@@ -1021,6 +1110,7 @@ refs.toggleVerbatimBtn.addEventListener("click", toggleVerbatimTranscriptView);
 refs.languageSelect.addEventListener("change", () => {
   if (latestState) renderState(latestState);
 });
+// If the bundle hasn't been built yet, clicking the link builds it instead of navigating.
 refs.artifactDownloadLink.addEventListener("click", (event) => {
   if (refs.artifactDownloadLink.dataset.mode === "build") {
     event.preventDefault();
@@ -1041,6 +1131,7 @@ refs.tabButtons.forEach((button) => {
 refs.togglePlatformMetaBtn.addEventListener("click", togglePlatformMeta);
 window.addEventListener("resize", resizeResultOutputs);
 
+// Kick off the app: wire the drop zone, load initial state/history, then open the websocket.
 setupAudioDropZone();
 initialLoad();
 connectWebSocket();

@@ -1,4 +1,6 @@
 agents:
+  # Main/interactive entry agent (see `main:` below): talks to the user and
+  # delegates transcript cleaning/summarization to the cleaner agent.
   - name: coordinator
     description: |
       Acts as the main point of contact between the user and the system.
@@ -37,10 +39,14 @@ agents:
       4. Do not include notes, reasoning, recommendations, or workflow narration.
       5. Do not ask additional questions and do not start a new transcription loop.
       
+    # Tools available to the coordinator: talk_to_user (its only channel to the
+    # human) and cleaner (the other agent, exposed here as a callable tool).
     tools:
       - talk_to_user
       - cleaner
 
+  # Entry agent for "auto" mode (see `automated:` below): does the actual
+  # transcript cleanup and bullet-point summarization.
   - name: cleaner
     description: |
       Cleans, formats, and summarizes the transcribed text. Removes filler words, fixes errors,
@@ -92,11 +98,15 @@ agents:
       6. Use set_summary() to store them (pass a JSON array of strings)
       7. If a validation error is returned, fix the issue and retry
       7. Return the summary to the coordinator by responding with ONLY the bullet points, one per line, prefixed with "- ". Do not include any extra text, commentary, or explanation.
+    # Tools available to the cleaner: fetching the raw transcript, writing back
+    # the cleaned transcript/summary, and reading the shared context state.
     tools:
       - get_transcript
       - set_cleaned_transcript
       - set_summary
       - get_context_snapshot
 
+# Agent to start with in interactive mode (default CLI mode).
 main: coordinator
+# Agent to start with when run in `--mode auto` (skips the interactive coordinator).
 automated: cleaner

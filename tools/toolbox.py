@@ -11,12 +11,14 @@ _tools: dict[str, Callable] = {}
 
 
 def _is_optional(annotation) -> bool:
+    """Return True if *annotation* is a Union/UnionType that includes None (e.g. Optional[str])."""
     origin = get_origin(annotation)
     args = get_args(annotation)
     return (origin is UnionType or origin is Union) and type(None) in args
 
 
 def _get_strict_json_schema_type(annotation) -> dict:
+    """Convert a Python type annotation into an OpenAI strict-mode JSON schema fragment."""
     origin = get_origin(annotation)
     args = get_args(annotation)
 
@@ -49,6 +51,8 @@ def _get_strict_json_schema_type(annotation) -> dict:
 
 
 def generate_function_schema(func: Callable[..., Any]) -> FunctionToolParam:
+    """Build an OpenAI FunctionToolParam schema from *func*'s signature, type hints, and docstring
+    (skipping ``self``/``ctx`` params; every remaining param is required)."""
     sig = inspect.signature(func)
     type_hints = get_type_hints(func)
 
@@ -78,6 +82,9 @@ def generate_function_schema(func: Callable[..., Any]) -> FunctionToolParam:
 
 
 class ToolBox:
+    """Registry of callable tools and their generated schemas, plus shared pipeline state
+    (audio path, in-flight transcription task) that tool functions can access."""
+
     _tools: list[FunctionToolParam]
 
     def __init__(self):
@@ -87,12 +94,15 @@ class ToolBox:
         self._transcription_task = None
 
     def set_audio_path(self, audio_path):
+        """Store the path to the audio file being processed."""
         self._audio_path = audio_path
 
     def get_audio_path(self):
+        """Return the stored audio file path."""
         return self._audio_path
 
     def set_transcription_task(self, task):
+        """Store the background asyncio task running the transcription."""
         self._transcription_task = task
 
     async def get_transcript(self) -> str:
@@ -105,6 +115,8 @@ class ToolBox:
             return f"Transcription failed: {e}"
 
     def tool(self, func):
+        """Register *func* as a callable tool: generates its schema and wraps it so exceptions
+        are caught and returned as a formatted traceback string instead of raising."""
         self._tools.append(generate_function_schema(func))
 
         if inspect.iscoroutinefunction(func):
@@ -131,9 +143,11 @@ class ToolBox:
         return func
 
     def get_tools(self, tool_names: list[str]):
+        """Return the generated schemas for the tools whose names are in *tool_names*."""
         return [tool for tool in self._tools if tool["name"] in set(tool_names)]
 
     async def run_tool(self, tool_name: str, **kwargs):
+        """Invoke the registered tool named *tool_name* with *kwargs*, awaiting it if it's async."""
         tool = self._funcs.get(tool_name)
         result = tool(**kwargs)
         if inspect.iscoroutine(result):
@@ -142,6 +156,8 @@ class ToolBox:
             return result
 
     def add_agent_tool(self, agent: Agent, run_agent):
+        """Register a sub-agent as a callable tool named after it, so other agents can hand off to it."""
+
         async def function(message: str) -> str:
             return await run_agent(agent, self, message)
 

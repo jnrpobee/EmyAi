@@ -10,6 +10,7 @@ from runtime_events import EVENT_PREFIX
 
 @pytest.fixture(autouse=True)
 def restore_state():
+    # Snapshots web_app.STATE before each test and restores it after, so tests can mutate global state freely.
     with web_app.STATE_LOCK:
         original = {
             key: value.copy() if isinstance(value, (dict, list)) else value for key, value in web_app.STATE.items()
@@ -21,6 +22,7 @@ def restore_state():
 
 
 class DummyProcess:
+    # Stand-in for a subprocess.Popen handle, feeding preset lines/exit code to _reader_thread.
     def __init__(self, stdout_lines: list[str], return_code: int):
         self.stdout = iter(stdout_lines)
         self.return_code = return_code
@@ -30,6 +32,7 @@ class DummyProcess:
 
 
 def prepare_reader_state(process: DummyProcess) -> None:
+    """Helper: seeds web_app.STATE as if a run had just started, for _reader_thread tests."""
     with web_app.STATE_LOCK:
         web_app.STATE.update(
             {
@@ -55,10 +58,12 @@ def prepare_reader_state(process: DummyProcess) -> None:
 
 
 def final_result_line(content: str) -> str:
+    """Helper: builds a fake stdout line carrying a "final_result" runtime event."""
     return f"{EVENT_PREFIX} {json.dumps({'type': 'final_result', 'content': content})}\n"
 
 
 def test_reader_thread_nonzero_exit_overrides_final_result_completed_status():
+    """Verifies that a nonzero process exit code marks the run as failed even though a final_result event was emitted."""
     process = DummyProcess([final_result_line("Final output")], return_code=1)
     prepare_reader_state(process)
 
@@ -73,6 +78,7 @@ def test_reader_thread_nonzero_exit_overrides_final_result_completed_status():
 
 
 def test_reader_thread_zero_exit_keeps_final_result_completed_status():
+    """Verifies that a zero exit code lets the final_result event's completed status stand."""
     process = DummyProcess([final_result_line("Final output")], return_code=0)
     prepare_reader_state(process)
 
@@ -86,6 +92,7 @@ def test_reader_thread_zero_exit_keeps_final_result_completed_status():
 
 
 def test_read_log_tail_limits_bytes_for_single_line_log(monkeypatch):
+    """Verifies _read_log_tail returns only the last LOG_TAIL_MAX_BYTES bytes of a single-line log file."""
     log_path = web_app.BASE_DIR / ".tmp" / "test-web-app-tail.log"
     log_path.parent.mkdir(exist_ok=True)
     log_path.write_bytes(b"0123456789abcdefghijklmnopqrstuvwxyz")
@@ -98,6 +105,7 @@ def test_read_log_tail_limits_bytes_for_single_line_log(monkeypatch):
 
 
 def test_upload_path_for_name_rejects_path_traversal(monkeypatch):
+    """Verifies _upload_path_for_name raises a 400 HTTPException for a path-traversal filename like "../audio.mp3"."""
     upload_dir = web_app.BASE_DIR / ".tmp" / "test-web-app-uploads"
     monkeypatch.setattr(web_app, "UPLOAD_DIR", upload_dir)
 
@@ -108,6 +116,7 @@ def test_upload_path_for_name_rejects_path_traversal(monkeypatch):
 
 
 def test_delete_uploads_removes_selected_files_and_returns_remaining(monkeypatch):
+    """Verifies delete_uploads removes only the requested file and lists the remaining audio uploads (ignoring non-audio files)."""
     upload_dir = web_app.BASE_DIR / ".tmp" / "test-web-app-uploads"
     shutil.rmtree(upload_dir, ignore_errors=True)
     upload_dir.mkdir(parents=True)

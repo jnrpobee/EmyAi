@@ -1,3 +1,4 @@
+/* Design tokens — global color, surface, and shadow variables used across the page */
 :root {
   --bg: #eef2f8;
   --surface: #ffffff;
@@ -13,6 +14,7 @@
   --shadow: 0 14px 34px rgba(20, 43, 87, 0.1);
 }
 
+/* Base reset — root font size and universal box-sizing */
 html {
   font-size: 18px;
 }
@@ -21,6 +23,7 @@ html {
   box-sizing: border-box;
 }
 
+/* Global body and heading defaults */
 body {
   margin: 0;
   padding: 0;
@@ -37,6 +40,7 @@ h3 {
   font-weight: 700;
 }
 
+/* Shared glass "panel" card look used by controls/monitor/upload/results panels */
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -44,6 +48,7 @@ h3 {
   box-shadow: var(--shadow);
 }
 
+/* Site header — top navy bar containing brand, identity, actions, and nav */
 .site-header {
   margin-bottom: 0.9rem;
   background: #002e5d;
@@ -53,6 +58,7 @@ h3 {
   padding: 0.86rem 1.1rem 0.72rem;
 }
 
+/* Header top row layout — splits brand (left) from meta/actions (right) */
 .header-top {
   display: flex;
   justify-content: space-between;
@@ -60,6 +66,7 @@ h3 {
   gap: 0.95rem;
 }
 
+/* Brand block — logo mark, wordmark, and product identity text */
 .header-brand {
   display: flex;
   align-items: center;
@@ -120,6 +127,7 @@ h3 {
   padding-top: 0.05rem;
 }
 
+/* Header actions — login button and the search icon button (drawn with ::before/::after) */
 .header-actions {
   display: flex;
   align-items: center;
@@ -170,6 +178,7 @@ h3 {
   transform: rotate(42deg);
 }
 
+/* Header meta pills and connection status — meta badge, status row, and WebSocket state badge */
 .meta-pill {
   display: inline-flex;
   width: fit-content;
@@ -221,6 +230,7 @@ h3 {
   color: #9b3f31;
 }
 
+/* Header bottom nav bar — links row under the header */
 .header-nav {
   margin-top: 0.62rem;
   padding-top: 0.5rem;
@@ -245,6 +255,7 @@ h3 {
   text-underline-offset: 0.16rem;
 }
 
+/* Main page layout grid — two-column split between left and right columns */
 .layout {
   display: grid;
   grid-template-columns: 360px 1fr;
@@ -252,6 +263,7 @@ h3 {
   padding: 0 1.1rem;
 }
 
+/* Site footer — bottom navy bar with meta text, links, and refresh timestamp */
 .site-footer {
   margin-top: 0.95rem;
   display: flex;
@@ -303,6 +315,7 @@ h3 {
   margin-left: auto;
 }
 
+/* Column wrappers for the two sides of the main layout grid */
 .left-column,
 .right-column {
   display: flex;
@@ -310,6 +323,7 @@ h3 {
   gap: 0.95rem;
 }
 
+/* Shared panel padding and heading size across all main content panels */
 .controls,
 .operations,
 .monitor,
@@ -329,12 +343,14 @@ h3 {
   font-size: 1.1rem;
 }
 
+/* Small helper/notice text under panel headings */
 .notice {
   margin: 0.48rem 0 0.7rem;
   color: var(--muted);
   font-size: 0.9rem;
 }
 
+/* Run status pill — idle/running/completed/failed indicator with colored dot */
 .status-pill {
   margin-top: 0.45rem;
   display: inline-flex;
@@ -393,6 +409,7 @@ h3 {
   background: var(--warn);
 }
 
+/* Form field wrapper and its label text */
 .field {
   display: block;
   margin-bottom: 0.68rem;
@@ -405,6 +422,7 @@ h3 {
   color: var(--muted);
 }
 
+/* File upload dropzone — drag/drop area with drag, has-file, and focus states */
 .file-dropzone {
   border: 1px dashed #b7c9e7;
   border-radius: 10px;
@@ -430,6 +448,7 @@ h3 {
   outline-offset: 1px;
 }
 
+/* Dropzone contents — visual "Choose file" button, status text, and clickable hidden input overlay */
 .file-input-visual {
   position: relative;
   display: flex;
@@ -493,6 +512,7 @@ h3 {
   font-size: 0.74rem;
 }
 
+/* Generic form control styling — text/file inputs, select, textarea */
 input[type="file"],
 input[type="text"],
 select,
@@ -519,12 +539,14 @@ select:focus-visible {
   border-color: #c7d7f2;
 }
 
+/* Row of equal-width action buttons (e.g. run controls) */
 .button-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 0.46rem;
 }
 
+/* Base button styling and states — default, hover/focus, disabled, and primary variant */
 button {
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -556,12 +578,14 @@ button.primary:focus-visible {
   color: #fff;
 }
 
+/* Denser sizing override for buttons inside .button-row */
 .button-row button {
   padding: 0.315rem 0.399rem;
   font-size: 0.63rem;
   border-radius: 5.25px;
 }
 
+/* Text-style link button (e.g. secondary/tertiary actions) */
 .link-button {
   margin-top: 0.52rem;
   border: 1px solid var(--line);
@@ -582,6 +606,7 @@ button.primary:focus-visible {
   color: #ffffff;
 }
 
+/* Panel title row — heading plus trailing action buttons, used by several panels */
 .panel-title-row {
   display: flex;
   align-items: center;
@@ -589,6 +614,7 @@ button.primary:focus-visible {
   gap: 0.5rem;
 }
 
+/* Upload manager modal — fullscreen overlay backdrop for the Files dialog */
 .upload-manager {
   position: fixed;
   inset: 0;
@@ -606,6 +632,7 @@ button.primary:focus-visible {
   display: none;
 }
 
+/* Upload manager modal card — glassmorphism panel body, including its highlight gradient overlay */
 .upload-manager-card {
   position: relative;
   width: min(42rem, 100%);
@@ -638,12 +665,14 @@ button.primary:focus-visible {
   color: #0d1b31;
 }
 
+/* Upload manager title bar action buttons */
 .upload-title-actions {
   display: flex;
   align-items: center;
   gap: 0.42rem;
 }
 
+/* Square icon-only button used for header actions (refresh/close) and its inner SVG icon */
 .icon-button {
   width: 1.85rem;
   height: 1.85rem;
@@ -662,6 +691,7 @@ button.primary:focus-visible {
   stroke-linejoin: round;
 }
 
+/* Compact button sizing for panel title rows and upload action rows */
 .panel-title-row button,
 .upload-actions button {
   padding: 0.32rem 0.58rem;
@@ -673,6 +703,7 @@ button.primary:focus-visible {
   padding: 0;
 }
 
+/* Upload manager refresh/close icon buttons — green refresh, red close, with hover colors */
 #refreshUploadsBtn {
   border-color: var(--line);
   background: rgba(255, 255, 255, 0.65);
@@ -701,6 +732,7 @@ button.primary:focus-visible {
   color: #ffffff;
 }
 
+/* Upload manager list controls — actions row, select-all checkbox row, scrollable file list, empty state */
 .upload-actions {
   margin-top: 0.55rem;
   display: flex;
@@ -737,6 +769,7 @@ button.primary:focus-visible {
   font-size: 0.7rem;
 }
 
+/* History modal refresh/close icon buttons — same pattern as upload manager's header buttons */
 #refreshHistoryBtn {
   border-color: transparent;
   background: rgba(255, 255, 255, 0.65);
@@ -765,6 +798,7 @@ button.primary:focus-visible {
   color: #ffffff;
 }
 
+/* History list row — container card for one past transcription/history entry, selected state, and its checkbox */
 .history-row {
   border: 1px solid rgba(120, 144, 181, 0.75);
   border-radius: 9px;
@@ -788,6 +822,7 @@ button.primary:focus-visible {
   flex-shrink: 0;
 }
 
+/* Bulk-select mode toggles — shows per-row checkboxes and the bulk actions bar when selecting */
 .history-select {
   display: none;
 }
@@ -800,6 +835,7 @@ button.primary:focus-visible {
   display: none;
 }
 
+/* History row content — file name, meta row, and status tags (done/pending) */
 .history-details {
   flex: 1 1 9rem;
   min-width: 6rem;
@@ -850,6 +886,7 @@ button.primary:focus-visible {
   border: 1px solid #d9dee8;
 }
 
+/* History row action buttons — "use this file" button and generic in-row buttons/downloads */
 .history-use-btn {
   border: 1px solid transparent;
   border-radius: 7px;
@@ -888,6 +925,7 @@ button.primary:focus-visible {
   color: #ffffff;
 }
 
+/* Toggle for entering/exiting history bulk-select mode */
 #toggleHistorySelectBtn {
   border-color: transparent;
   background: transparent;
@@ -902,6 +940,7 @@ button.primary:focus-visible {
   color: #214fa6;
 }
 
+/* History row footer — actions wrapper, verbatim toggle, and grouped download buttons */
 .history-row-actions {
   display: flex;
   align-items: center;
@@ -936,6 +975,7 @@ button.primary:focus-visible {
   font-size: 0.7rem;
 }
 
+/* Delete-confirmation popup — inline warning card with title, message, options, and confirm/cancel actions */
 .delete-confirm-popup {
   position: absolute;
   left: 50%;
@@ -1015,6 +1055,7 @@ button.primary:focus-visible {
   border-radius: 8px;
 }
 
+/* Danger button variant used for destructive actions (e.g. delete confirm) */
 button.danger {
   border-color: var(--line);
   background: transparent;
@@ -1028,6 +1069,7 @@ button.danger:focus-visible {
   color: #ffffff;
 }
 
+/* Operations panel — key/value stat grid (ops-label/ops-value cards) */
 .ops-grid {
   margin-top: 0.6rem;
   display: grid;
@@ -1063,6 +1105,7 @@ button.danger:focus-visible {
   font-size: 0.92rem;
 }
 
+/* Operations checklist — list of pipeline steps with a completed ("done") state */
 .checklist {
   list-style: none;
   margin: 0.48rem 0 0;
@@ -1087,6 +1130,7 @@ button.danger:focus-visible {
   font-weight: 600;
 }
 
+/* Platform metadata section — collapsible header, title, and expand/collapse toggle button */
 .platform-meta-header {
   margin-bottom: 0.6rem;
 }
@@ -1119,6 +1163,7 @@ button.danger:focus-visible {
   transform: rotate(-90deg);
 }
 
+/* Platform meta pills row and its collapsible visibility toggle */
 .standalone-meta-pills {
   margin-top: 0;
   display: flex;
@@ -1130,6 +1175,7 @@ button.danger:focus-visible {
   display: none;
 }
 
+/* Metric grid — small stat tiles (label + value) shown in the monitor panel */
 .metric-grid {
   margin-top: 0.5rem;
   display: grid;
@@ -1159,6 +1205,7 @@ button.danger:focus-visible {
   font-weight: 700;
 }
 
+/* Live monitor timeline — scrollable event log list with time/label/detail per entry */
 .timeline {
   margin-top: 0.7rem;
   border: 1px solid var(--line);
@@ -1213,6 +1260,7 @@ button.danger:focus-visible {
   font-size: 0.82rem;
 }
 
+/* Artifacts panel — download note, field, verbatim toggle, status card, and action row */
 .artifact-note {
   margin: 0.52rem 0 0.66rem;
   color: var(--muted);
@@ -1242,6 +1290,7 @@ button.danger:focus-visible {
   align-items: center;
 }
 
+/* Download link/button used throughout artifacts and history rows */
 .download {
   display: inline-block;
   text-decoration: none;
@@ -1267,6 +1316,7 @@ button.danger:focus-visible {
   opacity: 0.5;
 }
 
+/* Results panel tabs — tab header row and tab buttons (transcript/summary/log/lookup) */
 .tab-header {
   margin-top: 0.65rem;
   display: flex;
@@ -1300,6 +1350,7 @@ button.danger:focus-visible {
   color: #fff;
 }
 
+/* Tab panel visibility — only the active panel is shown */
 .tab-panel {
   display: none;
   margin-top: 0.5rem;
@@ -1309,6 +1360,7 @@ button.danger:focus-visible {
   display: block;
 }
 
+/* Toolbar row above tab content (e.g. copy button + toast) */
 .toolbar {
   display: flex;
   align-items: center;
@@ -1316,6 +1368,7 @@ button.danger:focus-visible {
   margin-bottom: 0.46rem;
 }
 
+/* "Copied" toast message shown/hidden after copy actions */
 #copyToast {
   color: #4f617d;
   font-size: 0.74rem;
@@ -1327,6 +1380,7 @@ button.danger:focus-visible {
   opacity: 1;
 }
 
+/* Output text areas — transcript/summary editable boxes and read-only log/lookup output boxes */
 #transcriptOutput,
 #summaryOutput {
   min-height: 120px;
@@ -1353,12 +1407,14 @@ button.danger:focus-visible {
   overflow-wrap: anywhere;
 }
 
+/* Lookup tab input row (query input + lookup button) */
 .lookup-row {
   display: flex;
   gap: 0.44rem;
   margin-bottom: 0.45rem;
 }
 
+/* Responsive breakpoint — tablet/narrow desktop: stack header, collapse layout to one column */
 @media (max-width: 1180px) {
   .header-top {
     flex-direction: column;
@@ -1390,6 +1446,7 @@ button.danger:focus-visible {
   }
 }
 
+/* Responsive breakpoint — mobile/small screens: tighter spacing, single-column controls, smaller type */
 @media (max-width: 680px) {
   .layout {
     padding: 0 0.7rem;
@@ -1485,6 +1542,7 @@ button.danger:focus-visible {
   }
 }
 
+/* Footer color/alignment overrides (!important) forcing footer styling regardless of inline/other rules */
 footer.site-footer {
   background-color: #002e5d !important;
   text-align: center !important;
