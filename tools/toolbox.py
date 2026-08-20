@@ -149,6 +149,8 @@ class ToolBox:
     async def run_tool(self, tool_name: str, **kwargs):
         """Invoke the registered tool named *tool_name* with *kwargs*, awaiting it if it's async."""
         tool = self._funcs.get(tool_name)
+        if tool is None:
+            raise ValueError(f"Unknown tool: {tool_name!r}")
         result = tool(**kwargs)
         if inspect.iscoroutine(result):
             return await result

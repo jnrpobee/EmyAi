@@ -45,9 +45,6 @@ class TranscriptContext:
     """Singleton store for the pipeline's shared state (transcript, summary, translations, metadata)
     that tools read from and write to across agent turns."""
 
-    # There are two modes, interactive and auto. Interactive is the regular flow,
-    # and auto skips the coordinator (mostly for use by frontend and with tests)
-    mode: str = "interactive"
     raw_transcript: str | None = None
     cleaned_transcript: str | None = None
     # This field syntax makes the summary list mutable in a dataclass
@@ -130,6 +127,7 @@ class TranscriptContext:
         """Called once the summary is set: writes JSON/DOCX/PDF outputs (plus a verbatim variant
         if a raw transcript exists), emits an export-ready event, and fires the translation callback."""
         # Write aligned output artifacts with a shared stem.
+        stem = None
         try:
             base = Path(self.audio_filename).stem if self.audio_filename else "summary"
             stem = self._next_output_stem(base)
@@ -171,7 +169,7 @@ class TranscriptContext:
             print_verbose(f"[context] output write failed: {exc}")
             print(f"[context] output write failed: {exc}")
 
-        if self.on_translation_ready is not None:
+        if stem is not None and self.on_translation_ready is not None:
             self.on_translation_ready(stem)
 
     @staticmethod
@@ -208,25 +206,11 @@ class TranscriptContext:
         emit_event("translation_ready", language=language_code, transcript=text)
         return
 
-    def get_translation(self, language_code: str) -> str | None:
-        """Return the stored translation for *language_code*, or None if not translated yet."""
-        return self.translations.get(language_code)
-
     def set_translated_summary(self, language_code: str, bullets: list[str]) -> None:
         """Store the translated summary bullets for *language_code*."""
         self.translated_summaries[language_code] = list(bullets)
         print_verbose(f"[context] translated_summary[{language_code!r}] stored ({len(bullets)} bullets)")
         emit_event("translated_summary_ready", language=language_code, summary=list(bullets))
-
-    def get_translated_summary(self, language_code: str) -> list[str] | None:
-        """Return the stored translated summary for *language_code*, or None if not translated yet."""
-        return self.translated_summaries.get(language_code)
-
-    def set_metadata(self, key: str, value: Any) -> str:
-        """Store an arbitrary metadata key/value pair (e.g. audio duration, speaker names)."""
-        self.metadata[key] = value
-        print_verbose(f"[context] metadata[{key!r}] set")
-        return "ok"
 
     def snapshot(self) -> dict[str, Any]:
         """Return the full context as a JSON-serialisable dict."""

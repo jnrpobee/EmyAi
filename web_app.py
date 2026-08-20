@@ -114,9 +114,11 @@ class LookupPayload(BaseModel):
     language: str | None = None
 
 
-# Request body for /api/bundle: optional translation language to include in the zip.
+# Request body for /api/bundle: optional translation language, and whether to bundle the
+# verbatim exports instead of the cleaned ones.
 class BundlePayload(BaseModel):
     language: str | None = None
+    verbatim: bool = False
 
 
 # Request body for /api/transcribe-existing: run a prior upload without re-uploading it.
@@ -229,11 +231,14 @@ def _validate_history_stem(stem: str) -> str:
     return stem
 
 
-# Detects a stem ending in a language-code suffix (e.g. "_es" or "_es_2"), meaning it's a
-# translated copy of another entry rather than a distinct original transcription.
-def _is_translated_stem(core: str) -> bool:
+# Detects a stem ending in a language-code suffix (e.g. "meeting_2_es") that is actually a
+# translated copy of another entry in *known_stems* -- not just any stem that happens to end in
+# a language code (e.g. an original upload literally named "interview_es.mp3").
+def _is_translated_stem(core: str, known_stems: set[str]) -> bool:
     match = re.search(r"_([a-z]{2,3})(?:_\d+)?$", core)
-    return bool(match and match.group(1) in SUPPORTED_LANGUAGES)
+    if not match or match.group(1) not in SUPPORTED_LANGUAGES:
+        return False
+    return core[: match.start()] in known_stems
 
 
 # Finds the original uploaded audio file whose stem matches a given transcription output stem.
@@ -255,6 +260,16 @@ def _find_upload_for_stem(stem: str) -> Path | None:
 def _list_history_entries() -> list[dict[str, object]]:
     if not OUTPUT_DIR.exists():
         return []
+
+    # Collect every real base stem first, so a language-suffixed stem is only treated as a
+    # translated copy when its un-suffixed base actually exists as its own entry.
+    known_stems: set[str] = set()
+    for path in OUTPUT_DIR.iterdir():
+        if not path.is_file() or path.suffix.lower() not in OUTPUT_EXPORT_EXTENSIONS:
+            continue
+        core = path.stem
+        known_stems.add(core[: -len("_verbatim")] if core.endswith("_verbatim") else core)
+
     entries: dict[str, dict[str, object]] = {}
     for path in OUTPUT_DIR.iterdir():
         if not path.is_file() or path.suffix.lower() not in OUTPUT_EXPORT_EXTENSIONS:
@@ -263,7 +278,7 @@ def _list_history_entries() -> list[dict[str, object]]:
         is_verbatim = core.endswith("_verbatim")
         if is_verbatim:
             core = core[: -len("_verbatim")]
-        if _is_translated_stem(core):
+        if _is_translated_stem(core, known_stems):
             continue
         try:
             mtime = path.stat().st_mtime
@@ -436,66 +451,60 @@ def _websocket_interval(snapshot: dict) -> float:
 # updating the relevant output field(s), notice text, and timeline for the matching event type.
 def _handle_event(process: subprocess.Popen, payload: dict) -> None:
     event_type = payload.get("type")
+    # Held for the whole dispatch (STATE_LOCK is an RLock) so a concurrent /api/clear or new
+    # /api/transcribe* can't reset STATE between the process-identity check and the write below.
     with STATE_LOCK:
         # Ignore events from a process that STATE no longer tracks (e.g. superseded by a newer run).
         if STATE["process"] is not process:
             return
-    if event_type == "raw_transcript_ready":
-        with STATE_LOCK:
+        if event_type == "raw_transcript_ready":
             STATE["raw_transcript_output"] = str(payload.get("transcript", "")).strip()
-        return
-    if event_type == "transcript_ready":
-        with STATE_LOCK:
+            return
+        if event_type == "transcript_ready":
             STATE["transcription_output"] = str(payload.get("transcript", "")).strip()
             if not STATE["summary_output"]:
                 STATE["summary_output"] = SUMMARY_LOADING_TEXT
             STATE["notice"] = "Transcript ready. Summary generation in progress."
             _append_timeline_locked("Transcript ready", "Cleaner returned transcript.")
-        return
-    if event_type == "summary_ready":
-        bullets = payload.get("summary") or []
-        summary = "\n".join(f"- {b}" for b in bullets if isinstance(b, str) and b.strip())
-        with STATE_LOCK:
+            return
+        if event_type == "summary_ready":
+            bullets = payload.get("summary") or []
+            summary = "\n".join(f"- {b}" for b in bullets if isinstance(b, str) and b.strip())
             STATE["summary_output"] = summary
             STATE["notice"] = "Summary ready. Preparing export files."
             _append_timeline_locked("Summary ready", f"{len([b for b in bullets if isinstance(b, str)])} bullets.")
-        return
-    if event_type == "translation_ready":
-        language = str(payload.get("language", "")).strip().lower()
-        transcript = str(payload.get("transcript", "")).strip()
-        if language:
-            with STATE_LOCK:
+            return
+        if event_type == "translation_ready":
+            language = str(payload.get("language", "")).strip().lower()
+            transcript = str(payload.get("transcript", "")).strip()
+            if language:
                 STATE["translations"][language] = transcript
                 STATE["notice"] = f"Translated transcript ready for {SUPPORTED_LANGUAGES.get(language, language)}."
                 _append_timeline_locked("Translation ready", language)
-        return
-    if event_type == "translated_summary_ready":
-        language = str(payload.get("language", "")).strip().lower()
-        bullets = payload.get("summary") or []
-        summary = "\n".join(f"- {b}" for b in bullets if isinstance(b, str) and b.strip())
-        if language:
-            with STATE_LOCK:
+            return
+        if event_type == "translated_summary_ready":
+            language = str(payload.get("language", "")).strip().lower()
+            bullets = payload.get("summary") or []
+            summary = "\n".join(f"- {b}" for b in bullets if isinstance(b, str) and b.strip())
+            if language:
                 STATE["translated_summaries"][language] = summary
                 STATE["notice"] = f"Translated summary ready for {SUPPORTED_LANGUAGES.get(language, language)}."
                 _append_timeline_locked("Translated summary ready", language)
-        return
-    if event_type == "export_files_ready":
-        export_files = _normalize_export_files(payload.get("export_files"))
-        verbatim_export_files = _normalize_export_files(payload.get("verbatim_export_files"))
-        with STATE_LOCK:
+            return
+        if event_type == "export_files_ready":
+            export_files = _normalize_export_files(payload.get("export_files"))
+            verbatim_export_files = _normalize_export_files(payload.get("verbatim_export_files"))
             STATE["export_files"] = export_files
             STATE["verbatim_export_files"] = verbatim_export_files
             STATE["pdf_output"] = export_files.get("pdf")
             STATE["notice"] = "Export files ready."
             _append_timeline_locked("Exports ready", "JSON, DOCX, and PDF written.")
-        return
-    if event_type == "translation_complete":
-        language = str(payload.get("language", "")).strip().lower() or "unknown"
-        with STATE_LOCK:
+            return
+        if event_type == "translation_complete":
+            language = str(payload.get("language", "")).strip().lower() or "unknown"
             _append_timeline_locked("Translation complete", language)
-        return
-    if event_type == "final_result":
-        with STATE_LOCK:
+            return
+        if event_type == "final_result":
             STATE["output"] = str(payload.get("content", "")).strip()
             STATE["status"] = COMPLETED_STATUS
             STATE["completed_at"] = datetime.now()
@@ -746,6 +755,7 @@ async def delete_uploads(payload: DeleteUploadsPayload):
 
     deleted: list[str] = []
     missing: list[str] = []
+    failed: list[str] = []
     for upload_path in upload_paths:
         if not upload_path.exists():
             missing.append(upload_path.name)
@@ -753,13 +763,15 @@ async def delete_uploads(payload: DeleteUploadsPayload):
         try:
             upload_path.unlink()
             deleted.append(upload_path.name)
-        except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"Failed to delete {upload_path.name}.") from exc
+        except OSError:
+            # Keep going on a per-file failure instead of aborting the whole batch, matching
+            # delete_history's tolerant behavior -- callers can see what failed via `failed`.
+            failed.append(upload_path.name)
 
     with STATE_LOCK:
         if STATE["active_audio_name"] in deleted:
             STATE["active_audio_name"] = None
-    return {"deleted": deleted, "missing": missing, "files": _list_uploaded_audio_files()}
+    return {"deleted": deleted, "missing": missing, "failed": failed, "files": _list_uploaded_audio_files()}
 
 
 # Lists past transcription runs available in output history.
@@ -804,10 +816,16 @@ async def delete_history(payload: DeleteHistoryPayload):
     deleted_files: list[str] = []
     deleted_stems: list[str] = []
     audio_deleted_stems: set[str] = set()
+    # Only match this stem's own translation/verbatim variants (e.g. "meeting_es",
+    # "meeting_verbatim") -- a wildcard suffix here would also delete unrelated later
+    # runs of the same base name (e.g. "meeting_2").
+    lang_alt = "|".join(re.escape(code) for code in SUPPORTED_LANGUAGES)
     for stem in stems:
         removed_any = False
         if payload.delete_transcripts:
-            pattern = re.compile(rf"^{re.escape(stem)}(?:_.*)?\.(?:json|docx|pdf)$", re.IGNORECASE)
+            pattern = re.compile(
+                rf"^{re.escape(stem)}(?:_(?:{lang_alt}))?(?:_verbatim)?\.(?:json|docx|pdf)$", re.IGNORECASE
+            )
             for path in OUTPUT_DIR.iterdir():
                 if path.is_file() and pattern.match(path.name):
                     try:
@@ -884,7 +902,7 @@ async def create_bundle(payload: BundlePayload):
     language_code = _language_value_to_code(payload.language)
     with STATE_LOCK:
         status = str(STATE["status"])
-        export_files = dict(STATE["export_files"])
+        export_files = dict(STATE["verbatim_export_files"] if payload.verbatim else STATE["export_files"])
         source_pdf = STATE["pdf_output"]
         run_language = STATE["translate_lang"]
         log_path = STATE["log_path"]
@@ -897,7 +915,9 @@ async def create_bundle(payload: BundlePayload):
         if candidate.exists() and candidate.is_file():
             sources.append(candidate)
 
-    if language_code and language_code == run_language:
+    # Verbatim exports aren't translated, so the translated-export lookup only applies to the
+    # cleaned bundle (matching download_pdf/docx/json's verbatim short-circuit).
+    if not payload.verbatim and language_code and language_code == run_language:
         for extension in (".json", ".docx", ".pdf"):
             translated = _find_translated_export(source_pdf, language_code, extension)
             if translated:

@@ -4,11 +4,6 @@ from typing import Optional
 from tools.context import get_context
 
 
-def get_raw_transcript() -> str:
-    """Return the raw transcript from the shared context. Blocks until available."""
-    return get_context().get_raw_transcript()
-
-
 def set_cleaned_transcript(text: str) -> str:
     """Store the cleaned transcript in the shared context.
 
@@ -39,11 +34,11 @@ def set_summary(bullets_json: str, n_bullets: Optional[int]) -> str:
     if not isinstance(bullets, list):
         return "[validation_error] expected a JSON array of strings"
 
-    min = get_context().min_bullets
-    max = get_context().max_bullets
+    min_bullets = get_context().min_bullets
+    max_bullets = get_context().max_bullets
 
-    if len(bullets) < min or len(bullets) > max:
-        return f"[validation_error] number of bullet points is outside acceptable range of {min}-{max}"
+    if len(bullets) < min_bullets or len(bullets) > max_bullets:
+        return f"[validation_error] number of bullet points is outside acceptable range of {min_bullets}-{max_bullets}"
 
     if n_bullets and len(bullets) != n_bullets:
         return "[validation_error] invalid number of bullet points"

@@ -703,35 +703,6 @@ button.primary:focus-visible {
   padding: 0;
 }
 
-/* Upload manager refresh/close icon buttons — green refresh, red close, with hover colors */
-#refreshUploadsBtn {
-  border-color: var(--line);
-  background: rgba(255, 255, 255, 0.65);
-  color: #1f9d63;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-#refreshUploadsBtn:hover,
-#refreshUploadsBtn:focus-visible {
-  border-color: #17804f;
-  background: #1f9d63;
-  color: #ffffff;
-}
-
-#closeUploadManagerBtn {
-  border-color: var(--line);
-  background: rgba(255, 255, 255, 0.65);
-  color: #c94333;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-#closeUploadManagerBtn:hover,
-#closeUploadManagerBtn:focus-visible {
-  border-color: #a93427;
-  background: #c94333;
-  color: #ffffff;
-}
-
 /* Upload manager list controls — actions row, select-all checkbox row, scrollable file list, empty state */
 .upload-actions {
   margin-top: 0.55rem;
@@ -798,16 +769,18 @@ button.primary:focus-visible {
   color: #ffffff;
 }
 
-/* History list row — container card for one past transcription/history entry, selected state, and its checkbox */
+/* History list row — single-line card for one past transcription/upload entry: file icon,
+   name/meta/tag, and a three-tier action cluster (primary Use, grouped Download, quiet Delete) */
 .history-row {
-  border: 1px solid rgba(120, 144, 181, 0.75);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.86);
-  padding: 0.5rem 0.55rem;
+  border: 1px solid rgba(120, 144, 181, 0.4);
+  border-radius: 0.67rem;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0.78rem 0.89rem;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem 0.6rem;
+  min-width: 0;
 }
 
 .history-row.selected {
@@ -835,7 +808,34 @@ button.primary:focus-visible {
   display: none;
 }
 
-/* History row content — file name, meta row, and status tags (done/pending) */
+/* File-type icon tile — tinted blue once transcribed, neutral gray while still pending */
+.history-file-icon {
+  width: 2.22rem;
+  height: 2.22rem;
+  flex-shrink: 0;
+  border-radius: 0.56rem;
+  display: inline-grid;
+  place-items: center;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.history-row.pending .history-file-icon {
+  background: #eef1f6;
+  color: var(--muted);
+}
+
+.history-file-icon svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* History row content — file name (single line, truncated), meta row, and status tag */
 .history-details {
   flex: 1 1 9rem;
   min-width: 6rem;
@@ -843,15 +843,17 @@ button.primary:focus-visible {
 
 .history-file-name {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 700;
   line-height: 1.2;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #0f213b;
 }
 
 .history-meta-row {
-  margin: 0.16rem 0 0;
+  margin: 0.18rem 0 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -860,15 +862,15 @@ button.primary:focus-visible {
 
 .history-file-meta {
   color: #334967;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
 }
 
 .history-tag {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  padding: 0.04rem 0.5rem;
-  font-size: 0.62rem;
+  padding: 0.08rem 0.5rem;
+  font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -886,43 +888,281 @@ button.primary:focus-visible {
   border: 1px solid #d9dee8;
 }
 
-/* History row action buttons — "use this file" button and generic in-row buttons/downloads */
+/* Action cluster — Use (primary), a divider, the Download menu (secondary, grouped), another
+   divider, and the Delete icon button (destructive, quiet until hovered) */
+.history-row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.56rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.history-action-divider {
+  width: 1px;
+  height: 1.33rem;
+  background: var(--line);
+  flex-shrink: 0;
+}
+
 .history-use-btn {
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text);
-  font-size: 0.68rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.33rem;
+  border: 1px solid var(--primary);
+  border-radius: 0.44rem;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 0.72rem;
   font-weight: 700;
-  padding: 0.24rem 0.5rem;
+  padding: 0.44rem 0.78rem;
+  white-space: nowrap;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .history-use-btn:hover,
 .history-use-btn:focus-visible {
-  background: #214fa6;
-  border-color: #214fa6;
-  color: #ffffff;
+  background: #163d82;
+  border-color: #163d82;
 }
 
-.history-row button {
-  padding: 0.28rem 0.5rem;
-  font-size: 0.65rem;
-  border-radius: 7px;
+.history-use-btn.selected {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.history-use-btn.selected:hover,
+.history-use-btn.selected:focus-visible {
+  background: #d9e6ff;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.history-use-btn svg {
+  width: 0.78rem;
+  height: 0.78rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Download menu — one trigger button groups the verbatim toggle and PDF/DOCX/JSON options that
+   used to sit in the row as separate controls */
+.history-download-wrap {
+  position: relative;
+}
+
+.history-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.39rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.44rem;
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.44rem 0.67rem;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.history-download-btn:hover,
+.history-download-btn:focus-visible,
+.history-download-btn[aria-expanded="true"] {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.history-download-btn svg {
+  width: 0.67rem;
+  height: 0.67rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.15s ease;
+}
+
+.history-download-btn[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.history-download-menu {
+  position: absolute;
+  top: calc(100% + 0.44rem);
+  right: 0;
+  z-index: 5;
+  width: 12.4rem;
+  padding: 0.44rem;
+  border-radius: 0.67rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.history-download-menu[hidden] {
+  display: none;
+}
+
+.history-menu-verbatim {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.33rem 0.44rem 0.56rem;
+}
+
+.history-menu-verbatim-label {
+  font-size: 0.69rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.history-menu-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 0 -0.44rem 0.33rem;
+}
+
+/* Small switch used for the Verbatim toggle inside the download menu */
+.history-toggle-switch {
+  display: inline-flex;
+  width: 1.78rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: var(--line-strong);
+  border: none;
+  padding: 0;
+  position: relative;
   flex-shrink: 0;
-  margin-left: auto;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-#historyList .download,
-#historyList button.danger {
-  border-color: transparent;
+.history-toggle-switch:hover,
+.history-toggle-switch:focus-visible {
+  background: var(--line-strong);
 }
 
-#historyList .download:hover,
-#historyList .download:focus-visible {
-  border-color: #224ea4;
-  background: #224ea4;
-  color: #ffffff;
+.history-toggle-switch[aria-checked="true"]:hover,
+.history-toggle-switch[aria-checked="true"]:focus-visible {
+  background: var(--primary);
+}
+
+.history-toggle-switch[aria-checked="true"] {
+  background: var(--primary);
+}
+
+.history-toggle-switch::after {
+  content: "";
+  position: absolute;
+  top: 0.11rem;
+  left: 0.11rem;
+  width: 0.78rem;
+  height: 0.78rem;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(20, 43, 87, 0.35);
+  transition: left 0.15s ease;
+}
+
+.history-toggle-switch[aria-checked="true"]::after {
+  left: calc(100% - 0.89rem);
+}
+
+.history-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.56rem;
+  width: 100%;
+  padding: 0.39rem 0.44rem;
+  border: none;
+  border-radius: 0.44rem;
+  background: transparent;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.history-menu-item:hover,
+.history-menu-item:focus-visible {
+  background: var(--surface-soft);
+}
+
+.history-menu-item.disabled {
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+.history-menu-badge {
+  width: 1.56rem;
+  height: 1.56rem;
+  flex-shrink: 0;
+  border-radius: 0.33rem;
+  background: var(--primary-soft);
+  color: var(--primary);
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.history-menu-item-label {
+  flex: 1 1 auto;
+  text-align: left;
+  font-size: 0.69rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.history-menu-item svg {
+  width: 0.78rem;
+  height: 0.78rem;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+/* Delete — an icon button that stays quiet until hovered/focused, instead of a red text link */
+.history-delete-btn {
+  width: 1.89rem;
+  height: 1.89rem;
+  flex-shrink: 0;
+  border-radius: 0.44rem;
+  display: inline-grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  padding: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.history-delete-btn:hover,
+.history-delete-btn:focus-visible {
+  background: #fdecea;
+  border-color: #f3c6bf;
+  color: var(--warn);
+}
+
+.history-delete-btn svg {
+  width: 0.89rem;
+  height: 0.89rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Toggle for entering/exiting history bulk-select mode */
@@ -938,41 +1178,6 @@ button.primary:focus-visible {
   border-color: #c7d7f2;
   background: #edf3ff;
   color: #214fa6;
-}
-
-/* History row footer — actions wrapper, verbatim toggle, and grouped download buttons */
-.history-row-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.history-verbatim-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: #334967;
-  font-size: 0.68rem;
-  font-weight: 700;
-}
-
-.history-verbatim-toggle input {
-  width: auto;
-  accent-color: #174ea6;
-}
-
-.history-download-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.history-download-group .download {
-  padding: 0.22rem 0.48rem;
-  font-size: 0.7rem;
 }
 
 /* Delete-confirmation popup — inline warning card with title, message, options, and confirm/cancel actions */

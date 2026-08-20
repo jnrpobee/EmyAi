@@ -79,6 +79,7 @@ let showingVerbatimTranscript = false;
 let historyEntries = [];
 let pendingDeleteHistoryStems = [];
 let historySelectionMode = false;
+let bundleBuildInFlight = false;
 
 // Static label lookup tables and the allowlist of audio file extensions accepted for upload.
 const ARTIFACT_LABELS = {
@@ -88,8 +89,27 @@ const ARTIFACT_LABELS = {
   bundle: "Bundle (ZIP)",
 };
 const HISTORY_FORMAT_LABELS = { pdf: "PDF", docx: "DOCX", json: "JSON" };
+const HISTORY_FORMAT_BADGES = { pdf: "PDF", docx: "DOC", json: "JSN" };
 const ACCEPTED_AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".flac", ".mp4"]);
 let audioDropDragDepth = 0;
+
+// Static, non-data-driven SVG icon markup used in the history row UI (safe to set via
+// innerHTML since none of it is interpolated from untrusted data).
+const ICON_WAVEFORM =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="10" x2="4" y2="14"/><line x1="8" y1="6" x2="8" y2="18"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="16" y1="6" x2="16" y2="18"/><line x1="20" y1="10" x2="20" y2="14"/></svg>';
+const ICON_CHEVRON_DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+const ICON_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 13 9 17 19 7"/></svg>';
+const ICON_DOWNLOAD_ARROW =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 19h14"/></svg>';
+const ICON_TRASH =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 7 20 7"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+
+// Build a <span> holding one of the static ICON_* SVG strings above.
+function buildIcon(markup) {
+  const span = document.createElement("span");
+  span.innerHTML = markup;
+  return span.firstChild;
+}
 
 // Return the currently selected translation language code (lowercased), or null if none chosen.
 function getSelectedLanguage() {
@@ -275,11 +295,11 @@ function renderArtifactSelection(running) {
   const label = ARTIFACT_LABELS[selected] || "Artifact";
   const entry = latestArtifactUrls[selected];
   const url = entry && typeof entry === "object" ? (verbatim ? entry.verbatim : entry.clean) : entry || null;
-  const supportsVerbatim = selected !== "bundle";
 
   if (selected === "bundle" && !url) {
     refs.artifactDownloadLink.href = "#";
     refs.artifactDownloadLink.dataset.mode = "build";
+    const buildLabel = `Build Bundle (ZIP${verbatim ? ", Verbatim" : ""})`;
     if (running) {
       refs.artifactDownloadLink.classList.add("disabled");
       refs.artifactDownloadLink.setAttribute("aria-disabled", "true");
@@ -288,7 +308,7 @@ function renderArtifactSelection(running) {
     } else {
       refs.artifactDownloadLink.classList.remove("disabled");
       refs.artifactDownloadLink.setAttribute("aria-disabled", "false");
-      refs.artifactDownloadLink.textContent = "Build Bundle (ZIP)";
+      refs.artifactDownloadLink.textContent = buildLabel;
       refs.artifactStatus.textContent = "Not built";
     }
     return;
@@ -296,7 +316,7 @@ function renderArtifactSelection(running) {
 
   delete refs.artifactDownloadLink.dataset.mode;
   setDownloadState(refs.artifactDownloadLink, url);
-  refs.artifactDownloadLink.textContent = `Download ${label}${verbatim && supportsVerbatim ? " (Verbatim)" : ""}`;
+  refs.artifactDownloadLink.textContent = `Download ${label}${verbatim ? " (Verbatim)" : ""}`;
 
   if (url) {
     refs.artifactStatus.textContent = "Available";
@@ -348,8 +368,22 @@ function syncUploadedFileActions() {
   });
   refs.historyList.querySelectorAll("[data-action='select-upload']").forEach((button) => {
     button.disabled = Boolean(running);
-    button.textContent = button.dataset.fileName === selectedUploadName ? "Selected" : "Use";
+    setUseButtonState(button, button.dataset.fileName === selectedUploadName);
   });
+}
+
+// Set a "Use"/"Reuse" button's label/icon and selected styling for whether it's the current
+// upload. Already-transcribed files say "Reuse" (re-running it makes a new pass over an existing
+// file) so it reads differently from a first-time "Use" on an untranscribed upload.
+function setUseButtonState(button, isSelected) {
+  button.classList.toggle("selected", isSelected);
+  button.replaceChildren();
+  if (isSelected) {
+    button.append(buildIcon(ICON_CHECK), document.createTextNode("Selected"));
+  } else {
+    const alreadyTranscribed = button.dataset.transcribed === "true";
+    button.append(document.createTextNode(alreadyTranscribed ? "Reuse" : "Use"));
+  }
 }
 
 // Clear the currently selected previously-uploaded file and refresh related UI.
@@ -597,6 +631,13 @@ function setupAudioDropZone() {
 
 // Section: backend API helpers (JSON POST helper and background file-list refresh).
 
+// Throw an Error with the backend's `detail` message (if any) when *response* is not OK.
+async function throwIfNotOk(response) {
+  if (response.ok) return;
+  const details = await response.json().catch(() => ({}));
+  throw new Error(details.detail || `Request failed (${response.status})`);
+}
+
 // POST a JSON payload to a URL and return the parsed JSON response, throwing on a non-OK status.
 async function callJson(url, payload) {
   const response = await fetch(url, {
@@ -604,10 +645,7 @@ async function callJson(url, payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload || {}),
   });
-  if (!response.ok) {
-    const details = await response.json().catch(() => ({}));
-    throw new Error(details.detail || `Request failed (${response.status})`);
-  }
+  await throwIfNotOk(response);
   return response.json();
 }
 
@@ -669,6 +707,139 @@ function toggleHistorySelectionMode() {
   setHistorySelectionMode(!historySelectionMode);
 }
 
+// Build one history row's action cluster: a primary Use button, a divider, the grouped
+// Download menu (verbatim toggle + pdf/docx/json, only when transcribed), another divider, and
+// the Delete icon button -- three visually distinct tiers instead of one flat row of controls.
+function buildHistoryRowActions(entry, running) {
+  const actions = document.createElement("div");
+  actions.className = "history-row-actions";
+
+  if (entry.audio_name) {
+    const useButton = document.createElement("button");
+    useButton.type = "button";
+    useButton.className = "history-use-btn";
+    useButton.dataset.action = "select-upload";
+    useButton.dataset.fileName = entry.audio_name;
+    useButton.dataset.transcribed = String(Boolean(entry.transcribed));
+    useButton.disabled = Boolean(running);
+    setUseButtonState(useButton, entry.audio_name === selectedUploadName);
+    actions.append(useButton);
+  }
+
+  if (entry.transcribed) {
+    if (actions.childElementCount) actions.append(buildActionDivider());
+    actions.append(buildHistoryDownloadMenu(entry));
+  }
+
+  if (actions.childElementCount) actions.append(buildActionDivider());
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "history-delete-btn";
+  deleteBtn.dataset.action = "delete-history";
+  deleteBtn.dataset.stem = entry.stem;
+  deleteBtn.setAttribute("aria-label", `Delete ${entry.audio_name || entry.stem}`);
+  deleteBtn.title = "Delete";
+  deleteBtn.append(buildIcon(ICON_TRASH));
+  actions.append(deleteBtn);
+
+  return actions;
+}
+
+// A short vertical rule separating the Use / Download / Delete action tiers.
+function buildActionDivider() {
+  const divider = document.createElement("div");
+  divider.className = "history-action-divider";
+  return divider;
+}
+
+// Build the "Download" trigger button plus its dropdown menu (verbatim toggle + pdf/docx/json),
+// grouping what used to be a checkbox and three separate links behind one control.
+function buildHistoryDownloadMenu(entry) {
+  const wrap = document.createElement("div");
+  wrap.className = "history-download-wrap";
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "history-download-btn";
+  trigger.dataset.action = "toggle-download-menu";
+  trigger.setAttribute("aria-haspopup", "true");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.append(document.createTextNode("Download"), buildIcon(ICON_CHEVRON_DOWN));
+
+  const menu = document.createElement("div");
+  menu.className = "history-download-menu";
+  menu.hidden = true;
+
+  const hasVerbatim = Boolean(entry.verbatim_formats && entry.verbatim_formats.length);
+  let verbatimSwitch = null;
+  if (hasVerbatim) {
+    const verbatimRow = document.createElement("div");
+    verbatimRow.className = "history-menu-verbatim";
+    const label = document.createElement("span");
+    label.className = "history-menu-verbatim-label";
+    label.textContent = "Verbatim";
+    verbatimSwitch = document.createElement("button");
+    verbatimSwitch.type = "button";
+    verbatimSwitch.className = "history-toggle-switch";
+    verbatimSwitch.setAttribute("role", "switch");
+    verbatimSwitch.setAttribute("aria-checked", "false");
+    verbatimSwitch.setAttribute("aria-label", "Download the verbatim (raw) transcript");
+    verbatimRow.append(label, verbatimSwitch);
+    menu.append(verbatimRow, buildMenuDivider());
+  }
+
+  ["pdf", "docx", "json"].forEach((format) => {
+    const link = document.createElement("a");
+    link.className = "history-menu-item";
+    const badge = document.createElement("span");
+    badge.className = "history-menu-badge";
+    badge.textContent = HISTORY_FORMAT_BADGES[format];
+    const label = document.createElement("span");
+    label.className = "history-menu-item-label";
+    label.textContent = HISTORY_FORMAT_LABELS[format];
+    link.append(badge, label, buildIcon(ICON_DOWNLOAD_ARROW));
+
+    // Refresh this format's link availability/URL based on the verbatim toggle.
+    const updateLink = () => {
+      const verbatim = verbatimSwitch ? verbatimSwitch.getAttribute("aria-checked") === "true" : false;
+      const available = verbatim ? entry.verbatim_formats : entry.formats;
+      const url = available && available.includes(format) ? buildHistoryDownloadUrl(entry.stem, format, verbatim) : null;
+      setDownloadState(link, url);
+      link.classList.toggle("disabled", !url);
+    };
+    updateLink();
+    if (verbatimSwitch) {
+      verbatimSwitch.addEventListener("click", () => {
+        const nowChecked = verbatimSwitch.getAttribute("aria-checked") !== "true";
+        verbatimSwitch.setAttribute("aria-checked", String(nowChecked));
+        updateLink();
+      });
+    }
+    menu.append(link);
+  });
+
+  wrap.append(trigger, menu);
+  return wrap;
+}
+
+// A thin horizontal rule between the verbatim toggle and the format list inside a download menu.
+function buildMenuDivider() {
+  const divider = document.createElement("div");
+  divider.className = "history-menu-divider";
+  return divider;
+}
+
+// Close every open history download menu (used before opening a different one, and on outside
+// click / Escape / list re-render).
+function closeAllHistoryDownloadMenus() {
+  refs.historyList.querySelectorAll(".history-download-menu").forEach((menu) => {
+    menu.hidden = true;
+  });
+  refs.historyList.querySelectorAll("[data-action='toggle-download-menu']").forEach((button) => {
+    button.setAttribute("aria-expanded", "false");
+  });
+}
+
 // Render the file history list (rows with select/use/download/delete controls) from server entries.
 function renderHistory(entries) {
   historyEntries = Array.isArray(entries) ? entries : [];
@@ -691,7 +862,7 @@ function renderHistory(entries) {
   const fragment = document.createDocumentFragment();
   historyEntries.forEach((entry) => {
     const row = document.createElement("article");
-    row.className = "history-row";
+    row.className = entry.transcribed ? "history-row" : "history-row pending";
     row.dataset.stem = entry.stem;
     row.dataset.audioName = entry.audio_name || "";
 
@@ -701,80 +872,34 @@ function renderHistory(entries) {
     checkbox.value = entry.stem;
     checkbox.setAttribute("aria-label", `Select ${entry.audio_name || entry.stem}`);
 
+    const fileIcon = document.createElement("span");
+    fileIcon.className = "history-file-icon";
+    fileIcon.append(buildIcon(ICON_WAVEFORM));
+
     const details = document.createElement("div");
     details.className = "history-details";
     const name = document.createElement("p");
     name.className = "history-file-name";
     name.textContent = entry.audio_name || entry.stem;
+    name.title = entry.audio_name || entry.stem;
 
     const metaRow = document.createElement("div");
     metaRow.className = "history-meta-row";
     const meta = document.createElement("span");
     meta.className = "history-file-meta";
     meta.textContent =
-      entry.size != null ? `${formatBytes(entry.size)} | ${formatDateTime(entry.created_at)}` : formatDateTime(entry.created_at);
+      entry.size != null
+        ? `${formatBytes(entry.size)} · ${formatDateTime(entry.created_at)}`
+        : formatDateTime(entry.created_at);
     const tag = document.createElement("span");
     tag.className = `history-tag ${entry.transcribed ? "done" : "pending"}`;
     tag.textContent = entry.transcribed ? "Transcribed" : "Not transcribed";
     metaRow.append(meta, tag);
     details.append(name, metaRow);
 
-    const actions = document.createElement("div");
-    actions.className = "history-row-actions";
+    const actions = buildHistoryRowActions(entry, running);
 
-    if (entry.audio_name) {
-      const useButton = document.createElement("button");
-      useButton.type = "button";
-      useButton.className = "history-use-btn";
-      useButton.dataset.action = "select-upload";
-      useButton.dataset.fileName = entry.audio_name;
-      useButton.textContent = entry.audio_name === selectedUploadName ? "Selected" : "Use";
-      useButton.disabled = Boolean(running);
-      actions.append(useButton);
-    }
-
-    if (entry.transcribed) {
-      const hasVerbatim = Boolean(entry.verbatim_formats && entry.verbatim_formats.length);
-      let verbatimToggle = null;
-      if (hasVerbatim) {
-        const toggleLabel = document.createElement("label");
-        toggleLabel.className = "history-verbatim-toggle";
-        verbatimToggle = document.createElement("input");
-        verbatimToggle.type = "checkbox";
-        const toggleText = document.createElement("span");
-        toggleText.textContent = "Verbatim";
-        toggleLabel.append(verbatimToggle, toggleText);
-        actions.append(toggleLabel);
-      }
-
-      const downloadGroup = document.createElement("div");
-      downloadGroup.className = "history-download-group";
-      ["pdf", "docx", "json"].forEach((format) => {
-        const link = document.createElement("a");
-        link.className = "download";
-        link.textContent = HISTORY_FORMAT_LABELS[format];
-
-        // Refresh this format's link availability/URL based on the verbatim toggle.
-        const updateLink = () => {
-          const verbatim = Boolean(verbatimToggle && verbatimToggle.checked);
-          const available = verbatim ? entry.verbatim_formats : entry.formats;
-          setDownloadState(link, available && available.includes(format) ? buildHistoryDownloadUrl(entry.stem, format, verbatim) : null);
-        };
-        updateLink();
-        if (verbatimToggle) verbatimToggle.addEventListener("change", updateLink);
-        downloadGroup.append(link);
-      });
-      actions.append(downloadGroup);
-    }
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "danger";
-    deleteBtn.dataset.action = "delete-history";
-    deleteBtn.dataset.stem = entry.stem;
-    deleteBtn.textContent = "Delete";
-
-    row.append(checkbox, details, actions, deleteBtn);
+    row.append(checkbox, fileIcon, details, actions);
     fragment.append(row);
   });
   refs.historyList.append(fragment);
@@ -786,10 +911,7 @@ async function loadHistory() {
   try {
     refs.noticeText.textContent = "Refreshing files.";
     const response = await fetch("/api/files");
-    if (!response.ok) {
-      const details = await response.json().catch(() => ({}));
-      throw new Error(details.detail || `Request failed (${response.status})`);
-    }
+    await throwIfNotOk(response);
     const data = await response.json();
     renderHistory(data.files || []);
     refs.noticeText.textContent = `Loaded ${(data.files || []).length} file(s).`;
@@ -913,10 +1035,7 @@ async function submitRun(event) {
       data.append("audio_file", file);
       if (language) data.append("language", language);
       const response = await fetch("/api/transcribe", { method: "POST", body: data });
-      if (!response.ok) {
-        const details = await response.json().catch(() => ({}));
-        throw new Error(details.detail || `Request failed (${response.status})`);
-      }
+      await throwIfNotOk(response);
       state = await response.json();
     }
     renderState(state);
@@ -941,8 +1060,11 @@ async function clearRun() {
 
 // Ask the server to build a downloadable ZIP bundle of the current run's exports.
 async function buildBundle() {
+  if (bundleBuildInFlight) return; // Avoid firing overlapping builds on rapid double-clicks.
+  bundleBuildInFlight = true;
   try {
-    await callJson("/api/bundle", { language: getSelectedLanguage() });
+    const verbatim = Boolean(refs.artifactVerbatimToggle && refs.artifactVerbatimToggle.checked);
+    await callJson("/api/bundle", { language: getSelectedLanguage(), verbatim });
     if (latestState) {
       latestState.bundle_output = "ready";
       renderState(latestState);
@@ -950,6 +1072,8 @@ async function buildBundle() {
     refs.noticeText.textContent = "Bundle ready for download.";
   } catch (error) {
     refs.noticeText.textContent = String(error.message || error);
+  } finally {
+    bundleBuildInFlight = false;
   }
 }
 
@@ -1059,7 +1183,7 @@ refs.historyPanel.addEventListener("click", (event) => {
     loadHistory();
   }
 });
-// Delegate clicks within the history list to the "use" / "delete" row actions.
+// Delegate clicks within the history list to the "use" / "download menu" / "delete" row actions.
 refs.historyList.addEventListener("click", (event) => {
   if (!(event.target instanceof Element)) return;
   const useButton = event.target.closest("[data-action='select-upload']");
@@ -1067,8 +1191,27 @@ refs.historyList.addEventListener("click", (event) => {
     selectUploadedFile(useButton.dataset.fileName || "");
     return;
   }
+  const downloadToggle = event.target.closest("[data-action='toggle-download-menu']");
+  if (downloadToggle) {
+    const menu = downloadToggle.nextElementSibling;
+    const wasOpen = menu && !menu.hidden;
+    closeAllHistoryDownloadMenus();
+    if (menu && !wasOpen) {
+      menu.hidden = false;
+      downloadToggle.setAttribute("aria-expanded", "true");
+    }
+    return;
+  }
   const deleteButton = event.target.closest("[data-action='delete-history']");
   if (deleteButton) showHistoryDeleteConfirm([deleteButton.dataset.stem || ""].filter(Boolean));
+});
+// Close any open download menu on an outside click or Escape.
+document.addEventListener("click", (event) => {
+  if (!(event.target instanceof Element) || event.target.closest(".history-download-wrap")) return;
+  closeAllHistoryDownloadMenus();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeAllHistoryDownloadMenus();
 });
 refs.historyList.addEventListener("change", (event) => {
   if (!(event.target instanceof Element)) return;

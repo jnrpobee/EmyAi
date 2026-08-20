@@ -1,7 +1,7 @@
 """Shared config types and the loader for the agent pipeline's config file (agents.yaml)."""
 
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class Agent(TypedDict):
@@ -16,10 +16,11 @@ class Agent(TypedDict):
 
 
 class Config(TypedDict):
-    """Top-level shape of the loaded config file: the agent roster plus entry points."""
+    """Top-level shape of the loaded config file: the agent roster plus its entry point(s)."""
 
     agents: list[Agent]
     main: str  # Name of the agent to start with in interactive mode.
+    automated: NotRequired[str]  # Optional: agent to start with in automated/auto mode (falls back to `main`).
 
 
 def load_config(config_path: Path = "agents.yaml") -> Config:
