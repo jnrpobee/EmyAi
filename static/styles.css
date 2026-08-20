@@ -907,7 +907,8 @@ button.primary:focus-visible {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.55rem;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .history-verbatim-toggle {
