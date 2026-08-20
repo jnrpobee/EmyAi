@@ -123,6 +123,8 @@ class DeleteUploadsPayload(BaseModel):
 
 class DeleteHistoryPayload(BaseModel):
     stems: list[str]
+    delete_audio: bool = True
+    delete_transcripts: bool = True
 
 
 def _append_timeline_locked(label: str, detail: str) -> None:
@@ -262,6 +264,45 @@ def _list_history_entries() -> list[dict[str, object]]:
             }
         )
     return sorted(result, key=lambda item: item["created_at"], reverse=True)
+
+
+def _list_all_files() -> list[dict[str, object]]:
+    history_by_stem = {entry["stem"]: entry for entry in _list_history_entries()}
+    uploads = _list_uploaded_audio_files()
+    upload_stems = {Path(str(upload["name"])).stem for upload in uploads}
+
+    result: list[dict[str, object]] = []
+    for upload in uploads:
+        stem = Path(str(upload["name"])).stem
+        history_entry = history_by_stem.get(stem)
+        result.append(
+            {
+                "stem": stem,
+                "audio_name": upload["name"],
+                "size": upload["size"],
+                "transcribed": history_entry is not None,
+                "created_at": history_entry["created_at"] if history_entry else upload["modified_at"],
+                "formats": history_entry["formats"] if history_entry else [],
+                "verbatim_formats": history_entry["verbatim_formats"] if history_entry else [],
+            }
+        )
+
+    for stem, history_entry in history_by_stem.items():
+        if stem in upload_stems:
+            continue
+        result.append(
+            {
+                "stem": stem,
+                "audio_name": None,
+                "size": None,
+                "transcribed": True,
+                "created_at": history_entry["created_at"],
+                "formats": history_entry["formats"],
+                "verbatim_formats": history_entry["verbatim_formats"],
+            }
+        )
+
+    return sorted(result, key=lambda item: str(item["created_at"]), reverse=True)
 
 
 def _normalize_export_files(raw: object) -> dict[str, str]:
@@ -598,6 +639,11 @@ async def list_uploads():
     return {"files": _list_uploaded_audio_files()}
 
 
+@app.get("/api/files")
+async def list_files():
+    return {"files": _list_all_files()}
+
+
 @app.post("/api/transcribe")
 async def transcribe(audio_file: UploadFile = File(...), language: str | None = Form(None)):
     suffix = Path(audio_file.filename or "").suffix.lower()
@@ -681,6 +727,8 @@ async def download_history_file(stem: str, format: str, verbatim: bool = False):
 async def delete_history(payload: DeleteHistoryPayload):
     if not payload.stems:
         raise HTTPException(status_code=400, detail="Select at least one history item.")
+    if not payload.delete_audio and not payload.delete_transcripts:
+        raise HTTPException(status_code=400, detail="Select at least one thing to delete.")
     stems = [_validate_history_stem(stem) for stem in payload.stems]
 
     with STATE_LOCK:
@@ -691,38 +739,42 @@ async def delete_history(payload: DeleteHistoryPayload):
 
     deleted_files: list[str] = []
     deleted_stems: list[str] = []
+    audio_deleted_stems: set[str] = set()
     for stem in stems:
-        pattern = re.compile(rf"^{re.escape(stem)}(?:_.*)?\.(?:json|docx|pdf)$", re.IGNORECASE)
         removed_any = False
-        for path in OUTPUT_DIR.iterdir():
-            if path.is_file() and pattern.match(path.name):
+        if payload.delete_transcripts:
+            pattern = re.compile(rf"^{re.escape(stem)}(?:_.*)?\.(?:json|docx|pdf)$", re.IGNORECASE)
+            for path in OUTPUT_DIR.iterdir():
+                if path.is_file() and pattern.match(path.name):
+                    try:
+                        path.unlink()
+                        deleted_files.append(path.name)
+                        removed_any = True
+                    except OSError:
+                        pass
+        if payload.delete_audio:
+            upload_path = _find_upload_for_stem(stem)
+            if upload_path is not None:
                 try:
-                    path.unlink()
-                    deleted_files.append(path.name)
+                    upload_path.unlink()
+                    deleted_files.append(upload_path.name)
                     removed_any = True
+                    audio_deleted_stems.add(stem)
                 except OSError:
                     pass
-        upload_path = _find_upload_for_stem(stem)
-        if upload_path is not None:
-            try:
-                upload_path.unlink()
-                deleted_files.append(upload_path.name)
-                removed_any = True
-            except OSError:
-                pass
         if removed_any:
             deleted_stems.append(stem)
 
     with STATE_LOCK:
         active_name = STATE["active_audio_name"]
         active_stem = Path(active_name).stem if active_name else None
-        if active_stem in deleted_stems and not _process_is_active(STATE["process"]):
+        if active_stem in audio_deleted_stems and not _process_is_active(STATE["process"]):
             STATE["active_audio_name"] = None
             _reset_outputs_locked()
         if deleted_stems:
             _append_timeline_locked("History deleted", ", ".join(deleted_stems))
 
-    return {"deleted_stems": deleted_stems, "deleted_files": deleted_files, "entries": _list_history_entries()}
+    return {"deleted_stems": deleted_stems, "deleted_files": deleted_files, "files": _list_all_files()}
 
 
 @app.post("/api/clear")

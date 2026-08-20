@@ -10,20 +10,8 @@ const refs = {
   fileChooseBtnVisual: document.getElementById("fileChooseBtnVisual"),
   fileStatusText: document.getElementById("fileStatusText"),
   languageSelect: document.getElementById("languageSelect"),
-  previousUploadSelect: document.getElementById("previousUploadSelect"),
   clearBtn: document.getElementById("clearBtn"),
   bundleBtn: document.getElementById("bundleBtn"),
-  showUploadsBtn: document.getElementById("showUploadsBtn"),
-  uploadManagerPanel: document.getElementById("uploadManagerPanel"),
-  refreshUploadsBtn: document.getElementById("refreshUploadsBtn"),
-  closeUploadManagerBtn: document.getElementById("closeUploadManagerBtn"),
-  selectAllUploads: document.getElementById("selectAllUploads"),
-  deleteUploadsBtn: document.getElementById("deleteUploadsBtn"),
-  deleteConfirmPopup: document.getElementById("deleteConfirmPopup"),
-  deleteConfirmMessage: document.getElementById("deleteConfirmMessage"),
-  cancelDeleteUploadsBtn: document.getElementById("cancelDeleteUploadsBtn"),
-  confirmDeleteUploadsBtn: document.getElementById("confirmDeleteUploadsBtn"),
-  uploadedFilesList: document.getElementById("uploadedFilesList"),
   showHistoryBtn: document.getElementById("showHistoryBtn"),
   historyPanel: document.getElementById("historyPanel"),
   toggleHistorySelectBtn: document.getElementById("toggleHistorySelectBtn"),
@@ -35,6 +23,10 @@ const refs = {
   historyList: document.getElementById("historyList"),
   historyDeleteConfirmPopup: document.getElementById("historyDeleteConfirmPopup"),
   historyDeleteConfirmMessage: document.getElementById("historyDeleteConfirmMessage"),
+  deleteAudioOption: document.getElementById("deleteAudioOption"),
+  deleteAudioCheckbox: document.getElementById("deleteAudioCheckbox"),
+  deleteTranscriptsOption: document.getElementById("deleteTranscriptsOption"),
+  deleteTranscriptsCheckbox: document.getElementById("deleteTranscriptsCheckbox"),
   cancelHistoryDeleteBtn: document.getElementById("cancelHistoryDeleteBtn"),
   confirmHistoryDeleteBtn: document.getElementById("confirmHistoryDeleteBtn"),
   artifactSelect: document.getElementById("artifactSelect"),
@@ -74,9 +66,7 @@ let latestState = null;
 let socket = null;
 let connectionState = "connecting";
 let lastRefreshAt = null;
-let uploadedFiles = [];
 let selectedUploadName = null;
-let pendingDeleteNames = [];
 let latestArtifactUrls = {
   pdf: { clean: null, verbatim: null },
   docx: { clean: null, verbatim: null },
@@ -329,31 +319,15 @@ function renderTimeline(items) {
   refs.timelineList.append(fragment);
 }
 
-function getSelectedUploadNames() {
-  return Array.from(refs.uploadedFilesList.querySelectorAll(".upload-select:checked")).map((input) => input.value);
-}
-
-function syncUploadSelectionState() {
-  const checkboxes = Array.from(refs.uploadedFilesList.querySelectorAll(".upload-select"));
-  const selectedCount = checkboxes.filter((input) => input.checked).length;
-  refs.deleteUploadsBtn.disabled = selectedCount === 0;
-  refs.deleteUploadsBtn.setAttribute("aria-disabled", selectedCount === 0 ? "true" : "false");
-  refs.selectAllUploads.disabled = checkboxes.length === 0;
-  refs.selectAllUploads.checked = checkboxes.length > 0 && selectedCount === checkboxes.length;
-  refs.selectAllUploads.indeterminate = selectedCount > 0 && selectedCount < checkboxes.length;
-}
-
 function syncUploadedFileActions() {
   const running = latestState && latestState.status === "Running";
-  refs.uploadedFilesList.querySelectorAll(".upload-file-row").forEach((row) => {
-    row.classList.toggle("selected", row.dataset.fileName === selectedUploadName);
+  refs.historyList.querySelectorAll(".history-row").forEach((row) => {
+    row.classList.toggle("selected", Boolean(selectedUploadName) && row.dataset.audioName === selectedUploadName);
   });
-  refs.uploadedFilesList.querySelectorAll("[data-action='select-upload']").forEach((button) => {
+  refs.historyList.querySelectorAll("[data-action='select-upload']").forEach((button) => {
     button.disabled = Boolean(running);
     button.textContent = button.dataset.fileName === selectedUploadName ? "Selected" : "Use";
   });
-  refs.previousUploadSelect.disabled = Boolean(running);
-  refs.previousUploadSelect.value = selectedUploadName || "";
 }
 
 function clearSelectedUpload() {
@@ -369,75 +343,6 @@ function selectUploadedFile(fileName) {
   syncAudioDropHint();
   syncUploadedFileActions();
   refs.noticeText.textContent = `${selectedUploadName} Ready. File Selected`;
-}
-
-function populatePreviousUploadOptions() {
-  const select = refs.previousUploadSelect;
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = uploadedFiles.length ? "Select an uploaded file..." : "No uploaded files found.";
-  const options = [placeholder, ...uploadedFiles.map((file) => {
-    const option = document.createElement("option");
-    option.value = file.name || "";
-    option.textContent = file.name || "Unnamed upload";
-    return option;
-  })];
-  select.replaceChildren(...options);
-  select.value = selectedUploadName || "";
-}
-
-function renderUploadedFiles(files) {
-  uploadedFiles = Array.isArray(files) ? files : [];
-  if (selectedUploadName && !uploadedFiles.some((file) => file.name === selectedUploadName)) {
-    selectedUploadName = null;
-    syncAudioDropHint();
-  }
-  populatePreviousUploadOptions();
-  refs.uploadedFilesList.replaceChildren();
-  if (!uploadedFiles.length) {
-    const empty = document.createElement("p");
-    empty.className = "upload-empty";
-    empty.textContent = "No uploaded files found.";
-    refs.uploadedFilesList.append(empty);
-    syncUploadSelectionState();
-    return;
-  }
-
-  const running = latestState && latestState.status === "Running";
-  const fragment = document.createDocumentFragment();
-  uploadedFiles.forEach((file) => {
-    const row = document.createElement("article");
-    const checkbox = document.createElement("input");
-    const details = document.createElement("div");
-    const name = document.createElement("p");
-    const meta = document.createElement("p");
-    const useButton = document.createElement("button");
-
-    row.className = "upload-file-row";
-    row.dataset.fileName = file.name || "";
-    checkbox.className = "upload-select";
-    checkbox.type = "checkbox";
-    checkbox.value = file.name || "";
-    checkbox.setAttribute("aria-label", `Select ${file.name || "uploaded file"}`);
-
-    name.className = "upload-file-name";
-    name.textContent = file.name || "Unnamed upload";
-    meta.className = "upload-file-meta";
-    meta.textContent = `${formatBytes(file.size)} | ${formatDateTime(file.modified_at)}`;
-
-    useButton.type = "button";
-    useButton.dataset.action = "select-upload";
-    useButton.dataset.fileName = file.name || "";
-    useButton.textContent = "Use";
-    useButton.disabled = Boolean(running);
-
-    details.append(name, meta);
-    row.append(checkbox, details, useButton);
-    fragment.append(row);
-  });
-  refs.uploadedFilesList.append(fragment);
-  syncUploadSelectionState();
-  syncUploadedFileActions();
 }
 
 function getTranscriptDisplayText(state, display) {
@@ -659,87 +564,14 @@ async function callJson(url, payload) {
   return response.json();
 }
 
-async function loadUploads() {
-  try {
-    refs.noticeText.textContent = "Refreshing uploaded files.";
-    const response = await fetch("/api/uploads");
-    if (!response.ok) {
-      const details = await response.json().catch(() => ({}));
-      throw new Error(details.detail || `Request failed (${response.status})`);
-    }
-    const data = await response.json();
-    renderUploadedFiles(data.files || []);
-    refs.noticeText.textContent = `Loaded ${(data.files || []).length} uploaded file(s).`;
-  } catch (error) {
-    refs.noticeText.textContent = String(error.message || error);
-  }
-}
-
 async function refreshUploadedFilesSilently() {
   try {
-    const response = await fetch("/api/uploads");
+    const response = await fetch("/api/files");
     if (!response.ok) return;
     const data = await response.json();
-    renderUploadedFiles(data.files || []);
+    renderHistory(data.files || []);
   } catch {
     // no-op: this is a background refresh, surfaced errors would be noisy
-  }
-}
-
-async function toggleUploadManager() {
-  if (refs.uploadManagerPanel.hidden) {
-    refs.uploadManagerPanel.hidden = false;
-    refs.showUploadsBtn.textContent = "Hide uploaded files";
-    await loadUploads();
-    refs.refreshUploadsBtn.focus();
-  } else {
-    closeUploadManager();
-  }
-}
-
-function closeUploadManager() {
-  hideDeleteConfirmPopup();
-  refs.uploadManagerPanel.hidden = true;
-  refs.showUploadsBtn.textContent = "Manage uploaded files";
-  refs.showUploadsBtn.focus();
-}
-
-function showDeleteConfirmPopup(fileNames) {
-  pendingDeleteNames = fileNames;
-  refs.deleteConfirmMessage.textContent = `Delete ${fileNames.length} selected uploaded file(s)? This cannot be undone.`;
-  refs.deleteConfirmPopup.hidden = false;
-  refs.confirmDeleteUploadsBtn.focus();
-}
-
-function hideDeleteConfirmPopup() {
-  pendingDeleteNames = [];
-  refs.deleteConfirmPopup.hidden = true;
-}
-
-function requestDeleteSelectedUploads() {
-  const fileNames = getSelectedUploadNames();
-  if (!fileNames.length) return;
-  showDeleteConfirmPopup(fileNames);
-}
-
-async function deleteSelectedUploads() {
-  const fileNames = pendingDeleteNames.slice();
-  if (!fileNames.length) return;
-  hideDeleteConfirmPopup();
-  try {
-    const data = await callJson("/api/uploads/delete", { file_names: fileNames });
-    if (selectedUploadName && fileNames.includes(selectedUploadName)) {
-      selectedUploadName = null;
-      syncAudioDropHint();
-    }
-    renderUploadedFiles(data.files || []);
-    refs.noticeText.textContent = data.deleted && data.deleted.length ? `Deleted ${data.deleted.length} upload(s).` : "No uploads deleted.";
-    if (latestState && data.deleted && data.deleted.includes(latestState.active_audio_name)) {
-      latestState.active_audio_name = null;
-      renderState(latestState);
-    }
-  } catch (error) {
-    refs.noticeText.textContent = String(error.message || error);
   }
 }
 
@@ -783,21 +615,28 @@ function toggleHistorySelectionMode() {
 
 function renderHistory(entries) {
   historyEntries = Array.isArray(entries) ? entries : [];
+  if (selectedUploadName && !historyEntries.some((entry) => entry.audio_name === selectedUploadName)) {
+    selectedUploadName = null;
+    syncAudioDropHint();
+  }
+
   refs.historyList.replaceChildren();
   if (!historyEntries.length) {
     const empty = document.createElement("p");
     empty.className = "upload-empty";
-    empty.textContent = "No transcriptions found.";
+    empty.textContent = "No files found.";
     refs.historyList.append(empty);
     syncHistorySelectionState();
     return;
   }
 
+  const running = latestState && latestState.status === "Running";
   const fragment = document.createDocumentFragment();
   historyEntries.forEach((entry) => {
     const row = document.createElement("article");
     row.className = "history-row";
     row.dataset.stem = entry.stem;
+    row.dataset.audioName = entry.audio_name || "";
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -810,44 +649,65 @@ function renderHistory(entries) {
     const name = document.createElement("p");
     name.className = "history-file-name";
     name.textContent = entry.audio_name || entry.stem;
-    const meta = document.createElement("p");
+
+    const metaRow = document.createElement("div");
+    metaRow.className = "history-meta-row";
+    const meta = document.createElement("span");
     meta.className = "history-file-meta";
-    meta.textContent = formatDateTime(entry.created_at);
-    details.append(name, meta);
+    meta.textContent =
+      entry.size != null ? `${formatBytes(entry.size)} | ${formatDateTime(entry.created_at)}` : formatDateTime(entry.created_at);
+    const tag = document.createElement("span");
+    tag.className = `history-tag ${entry.transcribed ? "done" : "pending"}`;
+    tag.textContent = entry.transcribed ? "Transcribed" : "Not transcribed";
+    metaRow.append(meta, tag);
+    details.append(name, metaRow);
 
     const actions = document.createElement("div");
     actions.className = "history-row-actions";
 
-    const hasVerbatim = Boolean(entry.verbatim_formats && entry.verbatim_formats.length);
-    let verbatimToggle = null;
-    if (hasVerbatim) {
-      const toggleLabel = document.createElement("label");
-      toggleLabel.className = "history-verbatim-toggle";
-      verbatimToggle = document.createElement("input");
-      verbatimToggle.type = "checkbox";
-      const toggleText = document.createElement("span");
-      toggleText.textContent = "Verbatim";
-      toggleLabel.append(verbatimToggle, toggleText);
-      actions.append(toggleLabel);
+    if (entry.audio_name) {
+      const useButton = document.createElement("button");
+      useButton.type = "button";
+      useButton.className = "history-use-btn";
+      useButton.dataset.action = "select-upload";
+      useButton.dataset.fileName = entry.audio_name;
+      useButton.textContent = entry.audio_name === selectedUploadName ? "Selected" : "Use";
+      useButton.disabled = Boolean(running);
+      actions.append(useButton);
     }
 
-    const downloadGroup = document.createElement("div");
-    downloadGroup.className = "history-download-group";
-    ["pdf", "docx", "json"].forEach((format) => {
-      const link = document.createElement("a");
-      link.className = "download";
-      link.textContent = HISTORY_FORMAT_LABELS[format];
+    if (entry.transcribed) {
+      const hasVerbatim = Boolean(entry.verbatim_formats && entry.verbatim_formats.length);
+      let verbatimToggle = null;
+      if (hasVerbatim) {
+        const toggleLabel = document.createElement("label");
+        toggleLabel.className = "history-verbatim-toggle";
+        verbatimToggle = document.createElement("input");
+        verbatimToggle.type = "checkbox";
+        const toggleText = document.createElement("span");
+        toggleText.textContent = "Verbatim";
+        toggleLabel.append(verbatimToggle, toggleText);
+        actions.append(toggleLabel);
+      }
 
-      const updateLink = () => {
-        const verbatim = Boolean(verbatimToggle && verbatimToggle.checked);
-        const available = verbatim ? entry.verbatim_formats : entry.formats;
-        setDownloadState(link, available && available.includes(format) ? buildHistoryDownloadUrl(entry.stem, format, verbatim) : null);
-      };
-      updateLink();
-      if (verbatimToggle) verbatimToggle.addEventListener("change", updateLink);
-      downloadGroup.append(link);
-    });
-    actions.append(downloadGroup);
+      const downloadGroup = document.createElement("div");
+      downloadGroup.className = "history-download-group";
+      ["pdf", "docx", "json"].forEach((format) => {
+        const link = document.createElement("a");
+        link.className = "download";
+        link.textContent = HISTORY_FORMAT_LABELS[format];
+
+        const updateLink = () => {
+          const verbatim = Boolean(verbatimToggle && verbatimToggle.checked);
+          const available = verbatim ? entry.verbatim_formats : entry.formats;
+          setDownloadState(link, available && available.includes(format) ? buildHistoryDownloadUrl(entry.stem, format, verbatim) : null);
+        };
+        updateLink();
+        if (verbatimToggle) verbatimToggle.addEventListener("change", updateLink);
+        downloadGroup.append(link);
+      });
+      actions.append(downloadGroup);
+    }
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
@@ -865,15 +725,15 @@ function renderHistory(entries) {
 
 async function loadHistory() {
   try {
-    refs.noticeText.textContent = "Refreshing history.";
-    const response = await fetch("/api/history");
+    refs.noticeText.textContent = "Refreshing files.";
+    const response = await fetch("/api/files");
     if (!response.ok) {
       const details = await response.json().catch(() => ({}));
       throw new Error(details.detail || `Request failed (${response.status})`);
     }
     const data = await response.json();
-    renderHistory(data.entries || []);
-    refs.noticeText.textContent = `Loaded ${(data.entries || []).length} transcription(s).`;
+    renderHistory(data.files || []);
+    refs.noticeText.textContent = `Loaded ${(data.files || []).length} file(s).`;
   } catch (error) {
     refs.noticeText.textContent = String(error.message || error);
   }
@@ -896,15 +756,30 @@ function closeHistoryPanel() {
   refs.showHistoryBtn.focus();
 }
 
+function updateDeleteConfirmActionable() {
+  const audioChecked = !refs.deleteAudioOption.hidden && refs.deleteAudioCheckbox.checked;
+  const transcriptsChecked = !refs.deleteTranscriptsOption.hidden && refs.deleteTranscriptsCheckbox.checked;
+  refs.confirmHistoryDeleteBtn.disabled = !audioChecked && !transcriptsChecked;
+}
+
 function showHistoryDeleteConfirm(stems) {
   if (!stems || !stems.length) return;
   pendingDeleteHistoryStems = stems;
+  const selectedEntries = stems.map((stem) => historyEntries.find((item) => item.stem === stem)).filter(Boolean);
+  const anyHasAudio = selectedEntries.some((entry) => entry.audio_name);
+  const anyTranscribed = selectedEntries.some((entry) => entry.transcribed);
+
+  refs.deleteAudioOption.hidden = !anyHasAudio;
+  refs.deleteAudioCheckbox.checked = true;
+  refs.deleteTranscriptsOption.hidden = !anyTranscribed;
+  refs.deleteTranscriptsCheckbox.checked = true;
+  updateDeleteConfirmActionable();
+
   if (stems.length === 1) {
-    const entry = historyEntries.find((item) => item.stem === stems[0]);
-    const label = (entry && (entry.audio_name || entry.stem)) || stems[0];
-    refs.historyDeleteConfirmMessage.textContent = `Delete "${label}"? This removes the uploaded audio and all transcript files. This cannot be undone.`;
+    const label = (selectedEntries[0] && (selectedEntries[0].audio_name || selectedEntries[0].stem)) || stems[0];
+    refs.historyDeleteConfirmMessage.textContent = `Delete "${label}"? Choose what to remove below. This cannot be undone.`;
   } else {
-    refs.historyDeleteConfirmMessage.textContent = `Delete ${stems.length} selected transcription(s)? This removes the uploaded audio and all transcript files. This cannot be undone.`;
+    refs.historyDeleteConfirmMessage.textContent = `Delete ${stems.length} selected file(s)? Choose what to remove below. This cannot be undone.`;
   }
   refs.historyDeleteConfirmPopup.hidden = false;
   refs.confirmHistoryDeleteBtn.focus();
@@ -924,15 +799,17 @@ function requestDeleteSelectedHistory() {
 async function deleteSelectedHistory() {
   const stems = pendingDeleteHistoryStems.slice();
   if (!stems.length) return;
+  const deleteAudio = !refs.deleteAudioOption.hidden && refs.deleteAudioCheckbox.checked;
+  const deleteTranscripts = !refs.deleteTranscriptsOption.hidden && refs.deleteTranscriptsCheckbox.checked;
+  if (!deleteAudio && !deleteTranscripts) return;
   hideHistoryDeleteConfirm();
   try {
-    const data = await callJson("/api/history/delete", { stems });
-    renderHistory(data.entries || []);
+    const data = await callJson("/api/history/delete", { stems, delete_audio: deleteAudio, delete_transcripts: deleteTranscripts });
+    renderHistory(data.files || []);
     refs.noticeText.textContent =
       data.deleted_stems && data.deleted_stems.length
-        ? `Deleted ${data.deleted_stems.length} transcription history item(s).`
-        : "No history items deleted.";
-    await refreshUploadedFilesSilently();
+        ? `Deleted ${data.deleted_stems.length} file(s).`
+        : "No files deleted.";
     const deletedStems = data.deleted_stems || [];
     const activeStem = latestState && latestState.active_audio_name ? latestState.active_audio_name.replace(/\.[^./]+$/, "") : null;
     if (activeStem && deletedStems.includes(activeStem)) {
@@ -1080,59 +957,6 @@ async function initialLoad() {
 refs.runForm.addEventListener("submit", submitRun);
 refs.clearBtn.addEventListener("click", clearRun);
 refs.bundleBtn.addEventListener("click", buildBundle);
-refs.showUploadsBtn.addEventListener("click", toggleUploadManager);
-refs.closeUploadManagerBtn.addEventListener("click", closeUploadManager);
-refs.selectAllUploads.addEventListener("change", () => {
-  refs.uploadedFilesList.querySelectorAll(".upload-select").forEach((input) => {
-    input.checked = refs.selectAllUploads.checked;
-  });
-  syncUploadSelectionState();
-});
-refs.uploadedFilesList.addEventListener("change", (event) => {
-  if (!(event.target instanceof Element)) return;
-  if (event.target && event.target.classList.contains("upload-select")) {
-    syncUploadSelectionState();
-  }
-});
-refs.uploadedFilesList.addEventListener("click", (event) => {
-  if (!(event.target instanceof Element)) return;
-  const button = event.target.closest("[data-action='select-upload']");
-  if (button) {
-    selectUploadedFile(button.dataset.fileName || "");
-    return;
-  }
-
-  const row = event.target.closest(".upload-file-row");
-  if (row && !event.target.closest("input")) {
-    const checkbox = row.querySelector(".upload-select");
-    if (checkbox) {
-      checkbox.checked = !checkbox.checked;
-      syncUploadSelectionState();
-    }
-  }
-});
-refs.uploadManagerPanel.addEventListener("click", (event) => {
-  if (!(event.target instanceof Element)) return;
-  if (event.target === refs.uploadManagerPanel) {
-    closeUploadManager();
-    return;
-  }
-
-  const refreshButton = event.target.closest("#refreshUploadsBtn");
-  if (refreshButton) {
-    event.preventDefault();
-    loadUploads();
-    return;
-  }
-
-  const deleteButton = event.target.closest("#deleteUploadsBtn");
-  if (deleteButton && !refs.deleteUploadsBtn.disabled) {
-    event.preventDefault();
-    requestDeleteSelectedUploads();
-  }
-});
-refs.cancelDeleteUploadsBtn.addEventListener("click", hideDeleteConfirmPopup);
-refs.confirmDeleteUploadsBtn.addEventListener("click", deleteSelectedUploads);
 refs.lookupBtn.addEventListener("click", runLookup);
 refs.showHistoryBtn.addEventListener("click", toggleHistoryPanel);
 refs.toggleHistorySelectBtn.addEventListener("click", toggleHistorySelectionMode);
@@ -1151,6 +975,11 @@ refs.historyPanel.addEventListener("click", (event) => {
 });
 refs.historyList.addEventListener("click", (event) => {
   if (!(event.target instanceof Element)) return;
+  const useButton = event.target.closest("[data-action='select-upload']");
+  if (useButton) {
+    selectUploadedFile(useButton.dataset.fileName || "");
+    return;
+  }
   const deleteButton = event.target.closest("[data-action='delete-history']");
   if (deleteButton) showHistoryDeleteConfirm([deleteButton.dataset.stem || ""].filter(Boolean));
 });
@@ -1167,22 +996,17 @@ refs.selectAllHistory.addEventListener("change", () => {
 refs.deleteHistoryBtn.addEventListener("click", () => {
   if (!refs.deleteHistoryBtn.disabled) requestDeleteSelectedHistory();
 });
+refs.deleteAudioCheckbox.addEventListener("change", updateDeleteConfirmActionable);
+refs.deleteTranscriptsCheckbox.addEventListener("change", updateDeleteConfirmActionable);
 refs.cancelHistoryDeleteBtn.addEventListener("click", hideHistoryDeleteConfirm);
 refs.confirmHistoryDeleteBtn.addEventListener("click", deleteSelectedHistory);
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !refs.deleteConfirmPopup.hidden) {
-    hideDeleteConfirmPopup();
-    return;
-  }
-  if (event.key === "Escape" && !refs.historyDeleteConfirmPopup.hidden) {
+  if (event.key !== "Escape") return;
+  if (!refs.historyDeleteConfirmPopup.hidden) {
     hideHistoryDeleteConfirm();
     return;
   }
-  if (event.key === "Escape" && !refs.uploadManagerPanel.hidden) {
-    closeUploadManager();
-    return;
-  }
-  if (event.key === "Escape" && !refs.historyPanel.hidden) {
+  if (!refs.historyPanel.hidden) {
     closeHistoryPanel();
   }
 });
@@ -1210,14 +1034,6 @@ refs.artifactSelect.addEventListener("change", () => {
 refs.artifactVerbatimToggle.addEventListener("change", () => {
   const running = latestState && latestState.status === "Running";
   renderArtifactSelection(Boolean(running));
-});
-refs.previousUploadSelect.addEventListener("change", () => {
-  const fileName = refs.previousUploadSelect.value;
-  if (fileName) {
-    selectUploadedFile(fileName);
-  } else {
-    clearSelectedUpload();
-  }
 });
 refs.tabButtons.forEach((button) => {
   button.addEventListener("click", () => activateTab(button.dataset.tab));

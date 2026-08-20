@@ -718,8 +718,7 @@ button.primary:focus-visible {
   font-weight: 800;
 }
 
-.select-all-row input,
-.upload-file-row input {
+.select-all-row input {
   width: auto;
   accent-color: #174ea6;
 }
@@ -732,46 +731,10 @@ button.primary:focus-visible {
   overflow-y: auto;
 }
 
-.upload-file-row {
-  border: 1px solid rgba(120, 144, 181, 0.75);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.86);
-  padding: 0.44rem;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.upload-file-row input {
-  cursor: pointer;
-}
-
-.upload-file-row.selected {
-  border-color: #244fa7;
-  background: rgba(231, 240, 255, 0.94);
-}
-
-.upload-file-name {
-  margin: 0;
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-  color: #0f213b;
-}
-
-.upload-file-meta,
 .upload-empty {
   margin: 0.12rem 0 0;
   color: #334967;
   font-size: 0.7rem;
-}
-
-.upload-file-row button {
-  padding: 0.28rem 0.5rem;
-  font-size: 0.65rem;
-  border-radius: 7px;
 }
 
 #refreshHistoryBtn {
@@ -813,6 +776,11 @@ button.primary:focus-visible {
   gap: 0.5rem 0.6rem;
 }
 
+.history-row.selected {
+  border-color: #244fa7;
+  background: rgba(231, 240, 255, 0.94);
+}
+
 .history-row input[type="checkbox"] {
   width: auto;
   accent-color: #174ea6;
@@ -846,10 +814,58 @@ button.primary:focus-visible {
   color: #0f213b;
 }
 
+.history-meta-row {
+  margin: 0.16rem 0 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .history-file-meta {
-  margin: 0.12rem 0 0;
   color: #334967;
   font-size: 0.7rem;
+}
+
+.history-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.04rem 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.history-tag.done {
+  background: #e4f7ee;
+  color: #147447;
+  border: 1px solid #b9e6cf;
+}
+
+.history-tag.pending {
+  background: #eef1f6;
+  color: #6b7690;
+  border: 1px solid #d9dee8;
+}
+
+.history-use-btn {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.24rem 0.5rem;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.history-use-btn:hover,
+.history-use-btn:focus-visible {
+  background: #214fa6;
+  border-color: #214fa6;
+  color: #ffffff;
 }
 
 .history-row button {
@@ -931,9 +947,8 @@ button.primary:focus-visible {
   box-shadow: 0 16px 38px rgba(10, 20, 38, 0.24);
   padding: 0.72rem;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
+  flex-direction: column;
+  gap: 0.55rem;
 }
 
 .delete-confirm-popup[hidden] {
@@ -953,9 +968,42 @@ button.primary:focus-visible {
   font-size: 0.74rem;
 }
 
+.delete-confirm-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.34rem;
+  border-top: 1px solid rgba(126, 42, 30, 0.15);
+  border-bottom: 1px solid rgba(126, 42, 30, 0.15);
+  padding: 0.5rem 0;
+}
+
+.delete-confirm-options[hidden] {
+  display: none;
+}
+
+.delete-confirm-option {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #40221f;
+  cursor: pointer;
+}
+
+.delete-confirm-option[hidden] {
+  display: none;
+}
+
+.delete-confirm-option input {
+  width: auto;
+  accent-color: var(--danger, #c94333);
+}
+
 .delete-confirm-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.42rem;
   flex-shrink: 0;
 }
