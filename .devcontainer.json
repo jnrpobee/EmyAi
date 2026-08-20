@@ -1,5 +1,5 @@
 {
-  "name": "ai-audio-transcriber",
+  "name": "EmyAi",
   "dockerComposeFile": "docker-compose.yml",
   "service": "app",
   "workspaceFolder": "/workspace",
