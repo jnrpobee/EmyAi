@@ -117,7 +117,7 @@ def make_text_response(text="Done."):
 
 
 async def test_cleaner_calls_tools_in_order(mock_openai, cleaner_agent):
-    """Verifies the cleaner agent calls its tools in the required order: transcript fetch, then clean, then summarize."""
+    """Verifies the cleaner agent calls its tools in order: fetch transcript, then clean, then summarize."""
     # Simulate: get_transcript → set_cleaned_transcript → set_summary → done
     mock_openai.responses.create.side_effect = [
         make_tool_call_response("get_transcript", {}),

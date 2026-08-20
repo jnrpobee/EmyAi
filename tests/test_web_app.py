@@ -63,7 +63,7 @@ def final_result_line(content: str) -> str:
 
 
 def test_reader_thread_nonzero_exit_overrides_final_result_completed_status():
-    """Verifies that a nonzero process exit code marks the run as failed even though a final_result event was emitted."""
+    """Verifies a nonzero process exit code marks the run failed even if a final_result event was emitted."""
     process = DummyProcess([final_result_line("Final output")], return_code=1)
     prepare_reader_state(process)
 
@@ -116,7 +116,7 @@ def test_upload_path_for_name_rejects_path_traversal(monkeypatch):
 
 
 def test_delete_uploads_removes_selected_files_and_returns_remaining(monkeypatch):
-    """Verifies delete_uploads removes only the requested file and lists the remaining audio uploads (ignoring non-audio files)."""
+    """Verifies delete_uploads removes only the requested file and lists remaining audio uploads, ignoring others."""
     upload_dir = web_app.BASE_DIR / ".tmp" / "test-web-app-uploads"
     shutil.rmtree(upload_dir, ignore_errors=True)
     upload_dir.mkdir(parents=True)
