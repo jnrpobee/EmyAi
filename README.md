@@ -94,11 +94,11 @@ This builds from `Dockerfile.dev` and volume-mounts the project into the contain
 
 ## Linting
 
-This project uses [ruff](https://docs.astral.sh/ruff/) for linting. A [pre-commit](https://pre-commit.com/) hook runs ruff automatically on every push.
+This project uses [ruff](https://docs.astral.sh/ruff/) for linting. A [pre-commit](https://pre-commit.com/) hook runs ruff automatically on every commit and every push.
 
 ```bash
-# install the pre-push hook (done automatically in the dev container)
-pre-commit install --hook-type pre-push
+# install both hooks (done automatically in the dev container)
+pre-commit install --hook-type pre-commit --hook-type pre-push
 
 # run the linter manually
 ruff check .

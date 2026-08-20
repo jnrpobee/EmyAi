@@ -4,7 +4,7 @@
   "service": "app",
   "workspaceFolder": "/workspace",
   "remoteUser": "vscode",
-  "postCreateCommand": "pre-commit install --hook-type pre-push",
+  "postCreateCommand": "pre-commit install --hook-type pre-commit --hook-type pre-push",
   "customizations": {
     "vscode": {
       "extensions": [
