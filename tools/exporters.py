@@ -177,6 +177,7 @@ def _write_pdf(path: Path, content: dict[str, Any]) -> None:
 
 
 def _set_pdf_metadata(canvas: Any, title: str) -> None:
+    """Set PDF document metadata (title/author/creator) and disable page compression, on each page."""
     canvas.setTitle(title)
     canvas.setAuthor("ai-audio-transcriber")
     canvas.setCreator("ai-audio-transcriber")
@@ -184,6 +185,7 @@ def _set_pdf_metadata(canvas: Any, title: str) -> None:
 
 
 def _build_pdf_styles(*, body_font: str, heading_font: str) -> dict[str, ParagraphStyle]:
+    """Build the title/section/body ParagraphStyles used in the PDF, using the resolved fonts."""
     base_styles = getSampleStyleSheet()
     return {
         "title": ParagraphStyle(
@@ -219,6 +221,7 @@ def _build_pdf_styles(*, body_font: str, heading_font: str) -> dict[str, Paragra
 
 
 def _content_has_cjk(content: dict[str, Any]) -> bool:
+    """Return True if the title, summary, or transcript contains any CJK Unified Ideograph characters."""
     parts: list[str] = [content.get("title", "")]
     parts.extend(content.get("summary", []))
     parts.extend(content.get("transcript_lines", []))
@@ -227,6 +230,7 @@ def _content_has_cjk(content: dict[str, Any]) -> bool:
 
 
 def _try_register_cjk_ttf_fonts() -> bool:
+    """Register bundled CJK TTF fonts with reportlab if present; returns True on success."""
     regular_path = _FONTS_DIR / "font-cjk-regular.ttf"
     bold_path = _FONTS_DIR / "font-cjk-bold.ttf"
     if not regular_path.exists():
@@ -243,6 +247,8 @@ def _try_register_cjk_ttf_fonts() -> bool:
 
 
 def _resolve_pdf_fonts(content: dict[str, Any]) -> tuple[str, str]:
+    """Pick (body_font, heading_font) for the PDF: prefer bundled TTFs, falling back to a
+    built-in CID font for CJK content or plain Helvetica when no bundled fonts are available."""
     if _content_has_cjk(content):
         if _try_register_cjk_ttf_fonts():
             bold_name = _PDF_FONT_TTF_CJK_BOLD if (_FONTS_DIR / "font-cjk-bold.ttf").exists() else _PDF_FONT_TTF_CJK
@@ -255,6 +261,7 @@ def _resolve_pdf_fonts(content: dict[str, Any]) -> tuple[str, str]:
 
 
 def _try_register_ttf_fonts() -> bool:
+    """Register bundled regular/bold TTF fonts with reportlab if both are present; returns True on success."""
     regular_path = _FONTS_DIR / "font-regular.ttf"
     bold_path = _FONTS_DIR / "font-bold.ttf"
     if not regular_path.exists() or not bold_path.exists():
@@ -270,6 +277,7 @@ def _try_register_ttf_fonts() -> bool:
 
 
 def _try_register_cid_font(font_name: str) -> bool:
+    """Register a built-in reportlab CID (e.g. CJK) font by name; returns True if registered or already present."""
     if font_name in pdfmetrics.getRegisteredFontNames():
         return True
     try:
@@ -280,4 +288,5 @@ def _try_register_cid_font(font_name: str) -> bool:
 
 
 def _escape_pdf_text(text: str) -> str:
+    """Escape XML/HTML special characters so *text* is safe inside a reportlab Paragraph."""
     return escape(text)

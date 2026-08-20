@@ -1,22 +1,29 @@
+"""Shared config types and the loader for the agent pipeline's config file (agents.yaml)."""
+
 from pathlib import Path
 from typing import TypedDict
 
 
 class Agent(TypedDict):
-    name: str
-    description: str
-    prompt: str
-    model: str
-    tools: list[str]
-    kwargs: dict | None
+    """Definition of a single agent as declared under `agents:` in the config file."""
+
+    name: str  # Unique identifier; also used as the tool name other agents call to delegate to it.
+    description: str  # Human-readable summary; becomes the tool's docstring when exposed to other agents.
+    prompt: str  # System prompt that defines the agent's role/instructions.
+    model: str  # OpenAI model id used for this agent's responses.
+    tools: list[str]  # Names of tools (including other agents) this agent may call.
+    kwargs: dict | None  # Extra keyword args forwarded to client.responses.create().
 
 
 class Config(TypedDict):
+    """Top-level shape of the loaded config file: the agent roster plus entry points."""
+
     agents: list[Agent]
-    main: str
+    main: str  # Name of the agent to start with in interactive mode.
 
 
 def load_config(config_path: Path = "agents.yaml") -> Config:
+    """Load a pipeline config from YAML, JSON, or markdowndata, based on the file extension."""
     ext = config_path.suffix.lower()
     if ext in [".yaml", ".yml"]:
         import yaml

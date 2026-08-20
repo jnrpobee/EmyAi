@@ -17,6 +17,7 @@ def print_verbose(*args, **kwargs):
 
 
 def register_all_tools(tool_box):
+    """Discover every ``*_tools.py`` module in this package and register its public functions on *tool_box*."""
     tools_dir = Path(__file__).parent
     tool_modules = tools_dir.glob("*_tools.py")
 

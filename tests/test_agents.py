@@ -14,6 +14,7 @@ base_dir = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def mock_openai():
+    # Replaces the real OpenAI client with a mock so tests never hit the network.
     with patch("agent.client") as mock_client:
         mock_client.responses.create = AsyncMock()
         yield mock_client
@@ -82,12 +83,14 @@ def test_deterministic_output_for_audio_file():
 
 
 def test_format_final_package_valid():
+    """Verifies that a payload with both transcription and summary is formatted into the final text package."""
     payload = json.dumps({"transcription": "Hello.", "summary": ["Point one."]})
     result = _format_final_package(payload)
     assert result == "Hello.\n\nSummary\n- Point one."
 
 
 def test_format_final_package_invalid_missing_summary():
+    """Verifies that a payload missing the required "summary" field returns None instead of formatted text."""
     payload = json.dumps({"transcription": "Hello."})
     assert _format_final_package(payload) is None
 
@@ -114,6 +117,7 @@ def make_text_response(text="Done."):
 
 
 async def test_cleaner_calls_tools_in_order(mock_openai, cleaner_agent):
+    """Verifies the cleaner agent calls its tools in order: fetch transcript, then clean, then summarize."""
     # Simulate: get_transcript → set_cleaned_transcript → set_summary → done
     mock_openai.responses.create.side_effect = [
         make_tool_call_response("get_transcript", {}),
@@ -133,6 +137,7 @@ async def test_cleaner_calls_tools_in_order(mock_openai, cleaner_agent):
 
 
 async def test_coordinator_delegates_to_cleaner(mock_openai, coordinator_agent):
+    """Verifies the coordinator agent hands off transcription work to the cleaner agent instead of doing it itself."""
     mock_openai.responses.create.side_effect = [
         make_tool_call_response("talk_to_user", {"message": "Hi! Transcribing..."}),
         make_tool_call_response("cleaner", {"message": "Summarize with 5 bullets"}),

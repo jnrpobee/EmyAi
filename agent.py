@@ -1,3 +1,5 @@
+"""CLI entrypoint that runs the coordinator/cleaner agent pipeline on an audio file."""
+
 import argparse
 import asyncio
 import json
@@ -18,10 +20,10 @@ from tools.toolbox import ToolBox
 from tools.transcription import load_audio_file
 from tools.translation import SUPPORTED_LANGUAGES, parse_language, run_translation
 
-load_dotenv()
+load_dotenv()  # Load OPENAI_API_KEY (and any other secrets) from a .env file.
 
-VERBOSE = False
-SUPPORTED_AUDIO_SUFFIXES = (".mp3", ".wav", ".m4a", ".flac", ".mp4")
+VERBOSE = False  # Toggled by --verbose; gates print_verbose() output.
+SUPPORTED_AUDIO_SUFFIXES = (".mp3", ".wav", ".m4a", ".flac", ".mp4")  # Accepted input file extensions.
 
 
 def print_verbose(*args, **kwargs):
@@ -30,6 +32,8 @@ def print_verbose(*args, **kwargs):
         print(*args, **kwargs, flush=True)
 
 
+# Shared singletons used across the module: the OpenAI client, the tool registry
+# agents call into, and the shared pipeline context (transcript/summary state).
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 tool_box = ToolBox()
 ctx = get_context()
@@ -89,12 +93,17 @@ async def get_transcript() -> str:
     return transcript
 
 
+# Register get_transcript plus every tool exposed by the `tools` package.
 tool_box.tool(get_transcript)
 tools.register_all_tools(tool_box)
 
 
 def add_agent_tools(agents: dict[str, Agent], tool_box: ToolBox):
+    """Expose each configured agent to the others as a callable tool (agent-to-agent delegation)."""
+
     def make_agent_tool(agent: Agent):
+        """Build the async wrapper function registered as `agent`'s tool."""
+
         async def function(message: str) -> str:
             if agent["name"] == "cleaner" and ctx.raw_transcript is None:
                 # The cleaner depends on shared transcript state. Populate it
@@ -120,6 +129,7 @@ def add_agent_tools(agents: dict[str, Agent], tool_box: ToolBox):
 
 
 async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
+    """Run one agent's system prompt + optional user message through a tool-calling loop until it emits a message."""
     print_verbose("")
     print_verbose(f"---- RUNNING {agent['name']} ----")
     if message:
@@ -130,7 +140,7 @@ async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
     if message is not None:
         history.append({"role": "user", "content": message})
 
-    tools = tool_box.get_tools(agent["tools"])
+    tools = tool_box.get_tools(agent["tools"])  # Only the tool names listed for this agent are made available.
 
     while True:
         response = await client.responses.create(
@@ -144,6 +154,7 @@ async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
 
         for item in response.output:
             if item.type == "function_call":
+                # Execute the requested tool and feed its result back into the conversation.
                 print_verbose(f"---- {agent['name']} calling {item.name} ----")
                 result = await tool_box.run_tool(item.name, **json.loads(item.arguments))
 
@@ -156,6 +167,7 @@ async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
                 )
 
             elif item.type == "message":
+                # A plain assistant message ends the loop for this agent invocation.
                 return response.output_text
 
             elif item.type == "reasoning":
@@ -166,6 +178,7 @@ async def run_agent(agent: Agent, tool_box: ToolBox, message: str | None):
 
 
 def validate_audio_path(path: Path) -> bool:
+    """Check that the given path exists, is a file, and has a supported audio extension."""
     if not path.exists():
         print(f"Error: Path '{path}' does not exist")
         return False
@@ -187,6 +200,7 @@ def _run_transcription(audio_path: str) -> str:
 
 
 async def async_main(audio_path: Path, translate_lang: str | None = None, mode: str = "interactive"):
+    """Kick off background transcription (and optional translation), then run the configured main agent."""
     tool_box.set_audio_path(str(audio_path))
     ctx.audio_filename = audio_path.name
 
@@ -215,11 +229,14 @@ async def async_main(audio_path: Path, translate_lang: str | None = None, mode: 
     config = load_config(Path("agents.yaml"))
     agents = {agent["name"]: agent for agent in config["agents"]}
     add_agent_tools(agents, tool_box)
+    # "auto" mode skips the interactive coordinator and starts straight at the
+    # `automated` entry agent (falls back to `main` if none is configured).
     if mode == "auto":
         main_agent = config.get("automated", config["main"])
     else:
         main_agent = config["main"]
     result = await run_agent(agents[main_agent], tool_box, None)
+    # Emit the structured final-result marker that web_app.py parses from stdout.
     emit_event("final_result", **_build_final_payload(result))
 
     if translation_task:
@@ -227,6 +244,7 @@ async def async_main(audio_path: Path, translate_lang: str | None = None, mode: 
 
 
 def main(audio_path: Path, translate_lang: str | None = None, mode: str = "interactive"):
+    """Validate the audio path then run the async pipeline to completion."""
     if not validate_audio_path(audio_path):
         sys.exit(1)
     asyncio.run(async_main(audio_path, translate_lang, mode))
@@ -254,8 +272,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # Propagate the --verbose flag to both this module's and the tools package's globals.
     VERBOSE = args.verbose
     tools.VERBOSE = args.verbose
 
+    # --translate expects a language code/name; parse_language normalizes/validates it.
     translate_lang = parse_language(args.translate) if args.translate else None
     main(args.audio_file_path, translate_lang, args.mode)

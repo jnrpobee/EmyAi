@@ -23,6 +23,7 @@ _DIARIZATION_UNAVAILABLE = False
 
 
 def _get_model() -> WhisperModel:
+    """Lazily load and cache the shared faster-whisper model."""
     global _MODEL
     if _MODEL is None:
         print_verbose(f"[transcription] loading whisper model {MODEL_NAME!r} on {DEVICE}/{COMPUTE_TYPE}")
@@ -111,6 +112,8 @@ def _speaker_for_segment(turns: list[tuple[float, float, str]], start: float, en
 
 
 def _build_labeled_transcript(segments, turns: list[tuple[float, float, str]]) -> str:
+    """Merge whisper *segments* with diarization *turns* into a "Speaker N:" labeled transcript,
+    grouping consecutive segments from the same speaker into one block."""
     display_names: dict[str, str] = {}
     turn_texts: list[tuple[str, list[str]]] = []
 
@@ -134,6 +137,7 @@ def _build_labeled_transcript(segments, turns: list[tuple[float, float, str]]) -
 
 
 def _transcribe_segments(file_path: str) -> list:
+    """Run whisper transcription on *file_path* and return the list of resulting segments."""
     model = _get_model()
     print_verbose(f"[transcription] using model={MODEL_NAME!r}")
     start = time.monotonic()
@@ -147,6 +151,8 @@ def _transcribe_segments(file_path: str) -> list:
 
 
 def load_audio_file(file_path: str) -> str:
+    """Transcribe the audio at *file_path* (with speaker diarization if available) and return
+    the resulting transcript text, or an error message string if the file is missing or transcription fails."""
     if not os.path.exists(file_path):
         return f"Error: File not found at {file_path}"
 

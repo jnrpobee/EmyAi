@@ -15,6 +15,7 @@ OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "output"))
 
 
 def _validate_transcript(value: str) -> list[str] | None:
+    """Return a list of error strings if *value* is blank, or None if valid."""
     # only checking if string is empty here, we can extend this later if we define a more specific transcript format
     errors = []
     if not value.strip():
@@ -41,6 +42,9 @@ def _validate_summary(bullets: list[str], min_bullets: int, max_bullets: int) ->
 
 @dataclass
 class TranscriptContext:
+    """Singleton store for the pipeline's shared state (transcript, summary, translations, metadata)
+    that tools read from and write to across agent turns."""
+
     # There are two modes, interactive and auto. Interactive is the regular flow,
     # and auto skips the coordinator (mostly for use by frontend and with tests)
     mode: str = "interactive"
@@ -72,6 +76,7 @@ class TranscriptContext:
     _raw_transcript_set_at: float | None = field(default=None, repr=False)
 
     def set_raw_transcript(self, text: str) -> list[str] | None:
+        """Validate and store the raw (unedited) transcript; returns validation errors, or None on success."""
         errors = _validate_transcript(text)
         if errors:
             return errors
@@ -82,11 +87,13 @@ class TranscriptContext:
         return None
 
     def get_raw_transcript(self) -> str:
+        """Return the raw transcript, or a placeholder message if it hasn't been set yet."""
         if self.raw_transcript is None:
             return "[context] raw transcript not yet available"
         return self.raw_transcript
 
     def set_cleaned_transcript(self, text: str) -> list[str] | None:
+        """Validate and store the cleaned transcript; returns validation errors, or None on success."""
         errors = _validate_transcript(text)
         if errors:
             return errors
@@ -99,11 +106,13 @@ class TranscriptContext:
         return None
 
     def get_cleaned_transcript(self) -> str:
+        """Return the cleaned transcript, or a placeholder message if it hasn't been set yet."""
         if self.cleaned_transcript is None:
             return "[context] cleaned transcript not yet available"
         return self.cleaned_transcript
 
     def set_summary(self, bullets: list[str]) -> list[str] | None:
+        """Validate and store the summary bullets, then trigger output-file generation via _on_complete."""
         errors = _validate_summary(bullets, self.min_bullets, self.max_bullets)
         if errors:
             return errors
@@ -114,9 +123,12 @@ class TranscriptContext:
         return None
 
     def get_summary(self) -> list[str]:
+        """Return a copy of the stored summary bullet list."""
         return list(self.summary)
 
     def _on_complete(self) -> None:
+        """Called once the summary is set: writes JSON/DOCX/PDF outputs (plus a verbatim variant
+        if a raw transcript exists), emits an export-ready event, and fires the translation callback."""
         # Write aligned output artifacts with a shared stem.
         try:
             base = Path(self.audio_filename).stem if self.audio_filename else "summary"
@@ -164,6 +176,8 @@ class TranscriptContext:
 
     @staticmethod
     def _next_output_stem(base: str) -> str:
+        """Return *base*, or *base* suffixed with the next free ``_N`` counter if output files
+        with that stem already exist, so repeated runs don't overwrite prior outputs."""
         extensions = {".json", ".docx", ".pdf"}
         if not OUTPUT_DIR.exists():
             return base
@@ -183,6 +197,7 @@ class TranscriptContext:
         return f"{base}_{highest + 1}"
 
     def set_translation(self, language_code: str, text: str) -> list[str] | None:
+        """Validate and store the translated transcript for *language_code*."""
         # Reusing _validate_transcript here might be risky with different languages
         # For the moment it just checks for an empty string but that could be tightened later
         errors = _validate_transcript(text)
@@ -194,17 +209,21 @@ class TranscriptContext:
         return
 
     def get_translation(self, language_code: str) -> str | None:
+        """Return the stored translation for *language_code*, or None if not translated yet."""
         return self.translations.get(language_code)
 
     def set_translated_summary(self, language_code: str, bullets: list[str]) -> None:
+        """Store the translated summary bullets for *language_code*."""
         self.translated_summaries[language_code] = list(bullets)
         print_verbose(f"[context] translated_summary[{language_code!r}] stored ({len(bullets)} bullets)")
         emit_event("translated_summary_ready", language=language_code, summary=list(bullets))
 
     def get_translated_summary(self, language_code: str) -> list[str] | None:
+        """Return the stored translated summary for *language_code*, or None if not translated yet."""
         return self.translated_summaries.get(language_code)
 
     def set_metadata(self, key: str, value: Any) -> str:
+        """Store an arbitrary metadata key/value pair (e.g. audio duration, speaker names)."""
         self.metadata[key] = value
         print_verbose(f"[context] metadata[{key!r}] set")
         return "ok"
@@ -221,6 +240,7 @@ class TranscriptContext:
         }
 
     def snapshot_json(self) -> str:
+        """Return snapshot() serialised to a JSON string."""
         return json.dumps(self.snapshot(), ensure_ascii=False)
 
 
@@ -228,6 +248,7 @@ _instance: TranscriptContext = TranscriptContext()
 
 
 def get_context() -> TranscriptContext:
+    """Return the process-wide TranscriptContext singleton."""
     return _instance
 
 
