@@ -53,6 +53,8 @@ const refs = {
   tabButtons: Array.from(document.querySelectorAll(".tab-btn")),
   tabPanels: Array.from(document.querySelectorAll(".tab-panel")),
   wsBadge: document.getElementById("wsBadge"),
+  footerWsBadge: document.getElementById("footerWsBadge"),
+  headerManageFilesBtn: document.getElementById("headerManageFilesBtn"),
   lastRefreshText: document.getElementById("lastRefreshText"),
   opsLanguage: document.getElementById("opsLanguage"),
   opsSourceFile: document.getElementById("opsSourceFile"),
@@ -206,9 +208,19 @@ function setChecklistState(node, done) {
 function setConnectionState(nextState) {
   connectionState = nextState;
   const label = nextState === "connected" ? "Connected" : nextState === "disconnected" ? "Disconnected" : "Connecting";
-  refs.wsBadge.textContent = label;
-  refs.wsBadge.className = `ws-badge ${nextState}`;
+  setStatusBadge(refs.wsBadge, nextState, label);
+  setStatusBadge(refs.footerWsBadge, nextState, label);
   refs.opsConnection.textContent = label;
+}
+
+// Rebuild a ".ws-badge" element's dot + label content and state class.
+function setStatusBadge(badge, state, label) {
+  if (!badge) return;
+  badge.className = `ws-badge ${state}`;
+  badge.replaceChildren();
+  const dot = document.createElement("span");
+  dot.className = "dot";
+  badge.append(dot, document.createTextNode(label));
 }
 
 // Resize a textarea/output element's height to fit its scrollable content.
@@ -1168,6 +1180,7 @@ refs.clearBtn.addEventListener("click", clearRun);
 refs.bundleBtn.addEventListener("click", buildBundle);
 refs.lookupBtn.addEventListener("click", runLookup);
 refs.showHistoryBtn.addEventListener("click", toggleHistoryPanel);
+refs.headerManageFilesBtn.addEventListener("click", toggleHistoryPanel);
 refs.toggleHistorySelectBtn.addEventListener("click", toggleHistorySelectionMode);
 refs.closeHistoryBtn.addEventListener("click", closeHistoryPanel);
 // Close the history panel when clicking its backdrop; handle the refresh button via delegation.
