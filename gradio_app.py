@@ -1,4 +1,4 @@
-"""Compatibility launcher for VoxAI.
+"""Compatibility launcher for EmyAI.
 
 Kept as a separate entrypoint (legacy Gradio-named script) that simply serves
 the real FastAPI/web app defined in web_app.py via uvicorn.

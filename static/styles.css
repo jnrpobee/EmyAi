@@ -16,7 +16,7 @@
 
 /* Base reset — root font size and universal box-sizing */
 html {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 * {
@@ -319,7 +319,6 @@ h3 {
 
 /* Shared panel padding and heading size across all main content panels */
 .controls,
-.operations,
 .monitor,
 .artifacts,
 .upload-manager,
@@ -328,8 +327,31 @@ h3 {
   padding: 0.92rem;
 }
 
+/* Panel header row — small icon tile beside the heading, used by every main content panel */
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.panel-icon {
+  width: 1.67rem;
+  height: 1.67rem;
+  flex-shrink: 0;
+  border-radius: 0.44rem;
+  background: var(--primary-soft);
+  color: var(--primary);
+  display: inline-grid;
+  place-items: center;
+}
+
+.panel-icon svg {
+  width: 0.89rem;
+  height: 0.89rem;
+}
+
 .controls h2,
-.operations h2,
 .monitor h2,
 .artifacts h2,
 .upload-manager h2,
@@ -533,10 +555,20 @@ select:focus-visible {
   border-color: #c7d7f2;
 }
 
-/* Row of equal-width action buttons (e.g. run controls) */
-.button-row {
+/* Start Run: the one primary action in Run Controls, full-width and visually dominant */
+.run-primary-btn {
+  display: block;
+  width: 100%;
+  font-size: 0.82rem;
+  padding: 0.52rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+/* Clear / Build Bundle: secondary actions, equal-width, below the primary button */
+.run-secondary-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 0.46rem;
 }
 
@@ -572,8 +604,8 @@ button.primary:focus-visible {
   color: #fff;
 }
 
-/* Denser sizing override for buttons inside .button-row */
-.button-row button {
+/* Denser sizing override for the secondary Clear/Build Bundle buttons */
+.run-secondary-row button {
   padding: 0.315rem 0.399rem;
   font-size: 0.63rem;
   border-radius: 5.25px;
@@ -767,9 +799,9 @@ button.primary:focus-visible {
    name/meta/tag, and a three-tier action cluster (primary Use, grouped Download, quiet Delete) */
 .history-row {
   border: 1px solid rgba(120, 144, 181, 0.4);
-  border-radius: 0.67rem;
+  border-radius: 0.61rem;
   background: rgba(255, 255, 255, 0.92);
-  padding: 0.78rem 0.89rem;
+  padding: 0.58rem 0.72rem;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -804,8 +836,8 @@ button.primary:focus-visible {
 
 /* File-type icon tile — tinted blue once transcribed, neutral gray while still pending */
 .history-file-icon {
-  width: 2.22rem;
-  height: 2.22rem;
+  width: 1.89rem;
+  height: 1.89rem;
   flex-shrink: 0;
   border-radius: 0.56rem;
   display: inline-grid;
@@ -820,8 +852,8 @@ button.primary:focus-visible {
 }
 
 .history-file-icon svg {
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 0.94rem;
+  height: 0.94rem;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -837,7 +869,7 @@ button.primary:focus-visible {
 
 .history-file-name {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
@@ -856,15 +888,15 @@ button.primary:focus-visible {
 
 .history-file-meta {
   color: #334967;
-  font-size: 0.68rem;
+  font-size: 0.6rem;
 }
 
 .history-tag {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  padding: 0.08rem 0.5rem;
-  font-size: 0.58rem;
+  padding: 0.06rem 0.42rem;
+  font-size: 0.52rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -896,7 +928,7 @@ button.primary:focus-visible {
 
 .history-action-divider {
   width: 1px;
-  height: 1.33rem;
+  height: 1.11rem;
   background: var(--line);
   flex-shrink: 0;
 }
@@ -904,14 +936,14 @@ button.primary:focus-visible {
 .history-use-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.33rem;
+  gap: 0.28rem;
   border: 1px solid var(--primary);
-  border-radius: 0.44rem;
+  border-radius: 0.39rem;
   background: var(--primary);
   color: #ffffff;
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 700;
-  padding: 0.44rem 0.78rem;
+  padding: 0.36rem 0.62rem;
   white-space: nowrap;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
@@ -935,8 +967,8 @@ button.primary:focus-visible {
 }
 
 .history-use-btn svg {
-  width: 0.78rem;
-  height: 0.78rem;
+  width: 0.67rem;
+  height: 0.67rem;
   fill: none;
   stroke: currentColor;
   stroke-width: 2.4;
@@ -953,14 +985,14 @@ button.primary:focus-visible {
 .history-download-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.39rem;
+  gap: 0.33rem;
   border: 1px solid var(--line-strong);
-  border-radius: 0.44rem;
+  border-radius: 0.39rem;
   background: var(--surface);
   color: var(--primary);
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 700;
-  padding: 0.44rem 0.67rem;
+  padding: 0.36rem 0.54rem;
   white-space: nowrap;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
@@ -974,8 +1006,8 @@ button.primary:focus-visible {
 }
 
 .history-download-btn svg {
-  width: 0.67rem;
-  height: 0.67rem;
+  width: 0.58rem;
+  height: 0.58rem;
   fill: none;
   stroke: currentColor;
   stroke-width: 2.6;
@@ -993,9 +1025,9 @@ button.primary:focus-visible {
   top: calc(100% + 0.44rem);
   right: 0;
   z-index: 5;
-  width: 12.4rem;
-  padding: 0.44rem;
-  border-radius: 0.67rem;
+  width: 11rem;
+  padding: 0.39rem;
+  border-radius: 0.61rem;
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
@@ -1014,7 +1046,7 @@ button.primary:focus-visible {
 }
 
 .history-menu-verbatim-label {
-  font-size: 0.69rem;
+  font-size: 0.62rem;
   font-weight: 700;
   color: var(--text);
 }
@@ -1074,9 +1106,9 @@ button.primary:focus-visible {
 .history-menu-item {
   display: flex;
   align-items: center;
-  gap: 0.56rem;
+  gap: 0.44rem;
   width: 100%;
-  padding: 0.39rem 0.44rem;
+  padding: 0.28rem 0.33rem;
   border: none;
   border-radius: 0.44rem;
   background: transparent;
@@ -1095,15 +1127,15 @@ button.primary:focus-visible {
 }
 
 .history-menu-badge {
-  width: 1.56rem;
-  height: 1.56rem;
+  width: 1.33rem;
+  height: 1.33rem;
   flex-shrink: 0;
-  border-radius: 0.33rem;
+  border-radius: 0.28rem;
   background: var(--primary-soft);
   color: var(--primary);
   display: inline-grid;
   place-items: center;
-  font-size: 0.5rem;
+  font-size: 0.44rem;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
@@ -1111,14 +1143,14 @@ button.primary:focus-visible {
 .history-menu-item-label {
   flex: 1 1 auto;
   text-align: left;
-  font-size: 0.69rem;
+  font-size: 0.62rem;
   font-weight: 600;
   color: var(--text);
 }
 
 .history-menu-item svg {
-  width: 0.78rem;
-  height: 0.78rem;
+  width: 0.67rem;
+  height: 0.67rem;
   fill: none;
   stroke: var(--muted);
   stroke-width: 2;
@@ -1129,10 +1161,10 @@ button.primary:focus-visible {
 
 /* Delete — an icon button that stays quiet until hovered/focused, instead of a red text link */
 .history-delete-btn {
-  width: 1.89rem;
-  height: 1.89rem;
+  width: 1.61rem;
+  height: 1.61rem;
   flex-shrink: 0;
-  border-radius: 0.44rem;
+  border-radius: 0.39rem;
   display: inline-grid;
   place-items: center;
   background: transparent;
@@ -1150,8 +1182,8 @@ button.primary:focus-visible {
 }
 
 .history-delete-btn svg {
-  width: 0.89rem;
-  height: 0.89rem;
+  width: 0.76rem;
+  height: 0.76rem;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -1268,22 +1300,6 @@ button.danger:focus-visible {
   color: #ffffff;
 }
 
-/* Operations panel — key/value stat grid (ops-label/ops-value cards) */
-.ops-grid {
-  margin-top: 0.6rem;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.44rem;
-}
-
-.ops-grid article {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-soft);
-  padding: 0.52rem 0.58rem;
-  min-width: 0;
-}
-
 .ops-label {
   margin: 0;
   color: var(--muted);
@@ -1299,7 +1315,7 @@ button.danger:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.operations h3 {
+.monitor > h3 {
   margin-top: 0.7rem;
   font-size: 0.92rem;
 }
@@ -1310,6 +1326,7 @@ button.danger:focus-visible {
   margin: 0.48rem 0 0;
   padding: 0;
   display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.36rem;
 }
 
@@ -1378,7 +1395,7 @@ button.danger:focus-visible {
 .metric-grid {
   margin-top: 0.5rem;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.35rem;
 }
 
@@ -1471,9 +1488,65 @@ button.danger:focus-visible {
 }
 
 .artifact-verbatim-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   margin-bottom: 0.6rem;
   font-weight: 600;
+  font-size: 0.86rem;
   color: var(--text);
+}
+
+/* Toggle switch — a real checkbox visually hidden inside a track/knob pair, so .checked and
+   the existing "change" listener keep working unchanged */
+.toggle-switch-visual {
+  position: relative;
+  display: inline-flex;
+  width: 1.78rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.toggle-switch-visual input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background 0.15s ease;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 0.11rem;
+  left: 0.11rem;
+  width: 0.78rem;
+  height: 0.78rem;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(20, 43, 59, 0.35);
+  transition: left 0.15s ease;
+}
+
+.toggle-switch-visual input:checked ~ .toggle-track {
+  background: var(--primary);
+}
+
+.toggle-switch-visual input:checked ~ .toggle-track .toggle-knob {
+  left: calc(100% - 0.89rem);
+}
+
+.toggle-switch-visual input:focus-visible ~ .toggle-track {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .artifact-status-card {
@@ -1645,6 +1718,10 @@ button.danger:focus-visible {
     padding: 0 0.7rem;
   }
 
+  .checklist {
+    grid-template-columns: 1fr;
+  }
+
   .site-header {
     padding: 0.74rem 0.7rem 0;
   }
@@ -1680,11 +1757,7 @@ button.danger:focus-visible {
     font-size: 0.68rem;
   }
 
-  .button-row {
-    grid-template-columns: 1fr;
-  }
-
-  .ops-grid {
+  .run-secondary-row {
     grid-template-columns: 1fr;
   }
 

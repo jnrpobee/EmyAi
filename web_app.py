@@ -1,4 +1,4 @@
-"""VoxAI web frontend with FastAPI + WebSocket for the transcriber pipeline."""
+"""EmyAI web frontend with FastAPI + WebSocket for the transcriber pipeline."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="VoxAI", lifespan=lifespan)
+app = FastAPI(title="EmyAI", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 

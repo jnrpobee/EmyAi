@@ -56,10 +56,8 @@ const refs = {
   footerWsBadge: document.getElementById("footerWsBadge"),
   headerManageFilesBtn: document.getElementById("headerManageFilesBtn"),
   lastRefreshText: document.getElementById("lastRefreshText"),
-  opsLanguage: document.getElementById("opsLanguage"),
   opsSourceFile: document.getElementById("opsSourceFile"),
   opsLastUpdated: document.getElementById("opsLastUpdated"),
-  opsConnection: document.getElementById("opsConnection"),
   checkInput: document.getElementById("checkInput"),
   checkRun: document.getElementById("checkRun"),
   checkExport: document.getElementById("checkExport"),
@@ -210,7 +208,6 @@ function setConnectionState(nextState) {
   const label = nextState === "connected" ? "Connected" : nextState === "disconnected" ? "Disconnected" : "Connecting";
   setStatusBadge(refs.wsBadge, nextState, label);
   setStatusBadge(refs.footerWsBadge, nextState, label);
-  refs.opsConnection.textContent = label;
 }
 
 // Rebuild a ".ws-badge" element's dot + label content and state class.
@@ -457,7 +454,6 @@ function renderState(state) {
   refs.metricView.textContent = display.viewName;
   refs.metricExports.textContent = String(Object.keys(state.export_files || {}).length);
 
-  refs.opsLanguage.textContent = display.viewName;
   refs.opsSourceFile.textContent = state.active_audio_name || "Not set";
   refs.opsLastUpdated.textContent = formatDateTime(state.completed_at || state.started_at);
   refs.lastRefreshText.textContent = `Last refresh: ${lastRefreshAt ? lastRefreshAt.toLocaleTimeString() : "--"}`;
