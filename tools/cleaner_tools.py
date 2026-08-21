@@ -16,6 +16,20 @@ def set_cleaned_transcript(text: str) -> str:
     return "ok"
 
 
+def set_verbatim_speaker_labels(text: str) -> str:
+    """Store a speaker-labeled copy of the raw transcript for the verbatim export.
+
+    Only call this when the raw transcript has no existing diarization labels but is
+    clearly multi-speaker: *text* must be the raw transcript's exact original wording with
+    only speaker labels/turn breaks inserted. Returns 'ok' on success or a list of
+    validation errors on failure.
+    """
+    errors = get_context().set_labeled_raw_transcript(text)
+    if errors:
+        return f"[validation_error] {'; '.join(errors)}"
+    return "ok"
+
+
 def set_summary(bullets_json: str, n_bullets: Optional[int]) -> str:
     """Store summary bullet points in the shared context.
 

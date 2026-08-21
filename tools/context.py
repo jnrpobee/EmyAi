@@ -47,6 +47,11 @@ class TranscriptContext:
 
     raw_transcript: str | None = None
     cleaned_transcript: str | None = None
+    # Verbatim transcript with inferred speaker labels/turn breaks inserted, but wording
+    # otherwise identical to raw_transcript. Only set when the cleaner determines the raw
+    # transcript is multi-speaker but has no real diarization labels of its own. When None,
+    # the verbatim export falls back to raw_transcript unchanged (see _on_complete).
+    labeled_raw_transcript: str | None = None
     # This field syntax makes the summary list mutable in a dataclass
     summary: list[str] = field(default_factory=list)
     # If we want to add metadata like audio duration, speaker names, or other relevant
@@ -108,6 +113,18 @@ class TranscriptContext:
             return "[context] cleaned transcript not yet available"
         return self.cleaned_transcript
 
+    def set_labeled_raw_transcript(self, text: str) -> list[str] | None:
+        """Validate and store a speaker-labeled copy of the raw transcript, used for the
+        verbatim export in place of the plain raw transcript; returns validation errors, or
+        None on success."""
+        errors = _validate_transcript(text)
+        if errors:
+            return errors
+        self.labeled_raw_transcript = text
+        print_verbose("[context] labeled_raw_transcript stored")
+        emit_event("labeled_raw_transcript_ready", transcript=text)
+        return None
+
     def set_summary(self, bullets: list[str]) -> list[str] | None:
         """Validate and store the summary bullets, then trigger output-file generation via _on_complete."""
         errors = _validate_summary(bullets, self.min_bullets, self.max_bullets)
@@ -152,7 +169,7 @@ class TranscriptContext:
                     summary=list(self.summary),
                     metadata=dict(self.metadata),
                     audio_filename=self.audio_filename,
-                    raw_transcript=self.raw_transcript,
+                    raw_transcript=self.labeled_raw_transcript or self.raw_transcript,
                     title="Audio Transcription Output (Verbatim)",
                 )
                 for format_name, out_path in verbatim_artifact_paths.items():
@@ -216,6 +233,7 @@ class TranscriptContext:
         """Return the full context as a JSON-serialisable dict."""
         return {
             "raw_transcript": self.raw_transcript,
+            "labeled_raw_transcript": self.labeled_raw_transcript,
             "cleaned_transcript": self.cleaned_transcript,
             "summary": list(self.summary),
             "metadata": dict(self.metadata),

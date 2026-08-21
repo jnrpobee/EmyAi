@@ -69,6 +69,7 @@ let socket = null;
 let connectionState = "connecting";
 let lastRefreshAt = null;
 let selectedUploadName = null;
+let previousRunStatus = null;
 let latestArtifactUrls = {
   pdf: { clean: null, verbatim: null },
   docx: { clean: null, verbatim: null },
@@ -206,12 +207,12 @@ function setChecklistState(node, done) {
 function setConnectionState(nextState) {
   connectionState = nextState;
   const label = nextState === "connected" ? "Connected" : nextState === "disconnected" ? "Disconnected" : "Connecting";
-  setStatusBadge(refs.wsBadge, nextState, label);
-  setStatusBadge(refs.footerWsBadge, nextState, label);
+  setConnectionBadge(refs.wsBadge, nextState, label);
+  setConnectionBadge(refs.footerWsBadge, nextState, label);
 }
 
 // Rebuild a ".ws-badge" element's dot + label content and state class.
-function setStatusBadge(badge, state, label) {
+function setConnectionBadge(badge, state, label) {
   if (!badge) return;
   badge.className = `ws-badge ${state}`;
   badge.replaceChildren();
@@ -432,6 +433,8 @@ function toggleVerbatimTranscriptView() {
 function renderState(state) {
   lastRefreshAt = new Date();
 
+  const previousRunStatusValue = previousRunStatus;
+  previousRunStatus = state.status || null;
   latestState = state;
   const display = buildDisplayState(state);
   const running = state.status === "Running";
@@ -472,6 +475,13 @@ function renderState(state) {
 
   renderTimeline(state.timeline || []);
   syncUploadedFileActions();
+
+  // Once a run finishes successfully, clear the Audio File selection so it doesn't keep
+  // showing the just-transcribed file as still "selected" for the next run.
+  if (state.status === "Completed" && previousRunStatusValue !== "Completed") {
+    clearSelectedUpload();
+    refs.audioFileInput.value = "";
+  }
 }
 
 // Return the lowercased file extension (including the leading dot) of a file name.
@@ -1012,8 +1022,7 @@ async function deleteSelectedHistory() {
     const activeStem = latestState && latestState.active_audio_name ? latestState.active_audio_name.replace(/\.[^./]+$/, "") : null;
     if (activeStem && deletedStems.includes(activeStem)) {
       // The file backing the active run was deleted; re-pull server state to reflect that.
-      const stateResponse = await fetch("/api/state");
-      if (stateResponse.ok) renderState(await stateResponse.json());
+      await refreshStateFromServer();
     }
   } catch (error) {
     refs.noticeText.textContent = String(error.message || error);
@@ -1050,6 +1059,10 @@ async function submitRun(event) {
     await refreshUploadedFilesSilently();
   } catch (error) {
     refs.noticeText.textContent = String(error.message || error);
+    // A rejection here (e.g. 409 "already running") means a run is actually active on the
+    // server -- resync immediately so the status pill/Live Monitor reflect that right away,
+    // instead of showing stale Idle data until the next websocket tick.
+    await refreshStateFromServer();
   }
 }
 
@@ -1157,16 +1170,21 @@ function connectWebSocket() {
   };
 }
 
-// Load the initial run state and file history when the page first loads.
-async function initialLoad() {
+// Fetch the current server state and render it immediately, instead of waiting for the next
+// websocket tick (which can lag up to WS_IDLE_INTERVAL_SECONDS behind a state change that just
+// happened via a REST call, e.g. a run starting right as this client polled while idle).
+async function refreshStateFromServer() {
   try {
     const response = await fetch("/api/state");
-    if (!response.ok) return;
-    const state = await response.json();
-    renderState(state);
+    if (response.ok) renderState(await response.json());
   } catch {
-    // no-op
+    // no-op -- the websocket will catch up on its own regardless
   }
+}
+
+// Load the initial run state and file history when the page first loads.
+async function initialLoad() {
+  await refreshStateFromServer();
   await refreshUploadedFilesSilently();
 }
 
